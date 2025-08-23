@@ -1,0 +1,20 @@
+# Jupyter
+.ipynb_checkpoints/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Data
+data/outputs/*
+*.pkl
+*.bin
+
+# Environment
+venv/
+env/
+
+# OS
+.DS_Store
+Thumbs.db
