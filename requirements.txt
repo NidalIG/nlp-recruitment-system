@@ -1,0 +1,14 @@
+pdfplumber
+python-docx
+google-generativeai
+pydantic
+tqdm
+pandas
+sentence-transformers
+scikit-learn
+numpy
+torch
+transformers
+openai
+matplotlib
+seaborn

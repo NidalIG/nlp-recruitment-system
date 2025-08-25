@@ -11,9 +11,11 @@ data/outputs/*
 *.pkl
 *.bin
 
-# Environment
+# Environnements virtuels
 venv/
 env/
+.venv/
+.env/
 
 # OS
 .DS_Store
