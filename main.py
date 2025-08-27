@@ -3,6 +3,7 @@ import numpy as np
 from cv_parsing.pipeline import run_cv_parsing
 from job_parsing import parse_job
 from cv_job_matching import CVJobEmbeddingSimilarity
+from flask import Flask
 
 # --- 1. Traiter le CV ---
 cv_file_paths = ["NajibIlham (3).pdf"]
@@ -15,6 +16,10 @@ cv_data = json.loads(cv_df['gemini_json_extracted'][0])  # dict compatible
 with open("job_text.txt", "r", encoding="utf-8") as f:
     job_text = f.read()
 job_data = parse_job(job_text)
+
+# --- 2b. Sauvegarder le résultat du parsing JD en JSON ---
+with open("job_parsed.json", "w", encoding="utf-8") as f:
+    json.dump(job_data, f, ensure_ascii=False, indent=4)
 
 # --- 3. Calculer la similarité ---
 calculator = CVJobEmbeddingSimilarity(model_type="sentence_transformer")

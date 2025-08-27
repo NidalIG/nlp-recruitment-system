@@ -12,3 +12,4 @@ transformers
 openai
 matplotlib
 seaborn
+flask

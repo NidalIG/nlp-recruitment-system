@@ -17,6 +17,9 @@ env/
 .venv/
 .env/
 
+# Ignorer tous les fichiers JSON générés
+*.json
+
 # OS
 .DS_Store
 Thumbs.db

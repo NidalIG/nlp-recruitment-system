@@ -201,20 +201,3 @@ Top correspondances de compétences:"""
             report += f"\n- {match['job_skill']} → {match['matched_cv_skill']} ({match['similarity']*100:.1f}%)"
         return report.strip()
 
-
-# Exemple d'utilisation
-if __name__=="__main__":
-    cv_data = {"skills":["Python","SQL","Machine Learning"],
-               "education":[{"degree":"Master AI","institution_name":"FSTG"}],
-               "experience":[{"job_title":"Data Scientist","description":"Analyse de données"}],
-               "certifications":["AI Fundamentals"]}
-    job_data = {"title":"Data Scientist","description":"Analyse de données et ML",
-                "required_skills":["Python","SQL","Machine Learning"],
-                "experience_required":"2-3 ans",
-                "education_required":"Master en informatique"}
-    
-    calculator = CVJobEmbeddingSimilarity(model_type="sentence_transformer")
-    if calculator.model is not None:
-        result = calculator.calculate_comprehensive_embedding_similarity(cv_data, job_data)
-        print(f"Score global: {result['overall_similarity_score']}% ({result['similarity_level']})")
-        print(calculator.generate_detailed_report(cv_data, job_data))
