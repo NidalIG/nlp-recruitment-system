@@ -1,16 +1,16 @@
 {
-    "overall_similarity_score": 51.290000915527344,
+    "overall_similarity_score": 45.06999969482422,
     "similarity_level": "Modérée",
     "model_used": "sentence_transformer",
     "sectional_scores": {
-        "skills": 60.43000030517578,
-        "experience": 8.220000267028809,
-        "education": 10.569999694824219,
-        "global": 45.83000183105469
+        "skills": 52.369998931884766,
+        "experience": 7.670000076293945,
+        "education": 10.09000015258789,
+        "global": 41.43000030517578
     },
     "skill_analysis": {
-        "average_skill_similarity": 87.62,
-        "skill_coverage": 71.43,
+        "average_skill_similarity": 75.24,
+        "skill_coverage": 57.14,
         "top_skill_matches": [
             {
                 "job_skill": "Python",
@@ -24,18 +24,18 @@
             },
             {
                 "job_skill": "Machine Learning",
-                "matched_cv_skill": "Machine Learning",
-                "similarity": 0.9999998211860657
+                "matched_cv_skill": "Scikitlearn",
+                "similarity": 0.3968355059623718
             },
             {
                 "job_skill": "Deep Learning",
-                "matched_cv_skill": "Deep Learning",
-                "similarity": 0.9999997019767761
+                "matched_cv_skill": "Scikitlearn",
+                "similarity": 0.4867955446243286
             },
             {
                 "job_skill": "NLP",
-                "matched_cv_skill": "Angular",
-                "similarity": 0.529200553894043
+                "matched_cv_skill": "NumPy",
+                "similarity": 0.7225570678710938
             }
         ]
     },
