@@ -7,9 +7,8 @@ pandas
 sentence-transformers
 scikit-learn
 numpy
-torch
 transformers
-openai
+
 matplotlib
 seaborn
 flask

@@ -1,0 +1,48 @@
+{
+    "overall_similarity_score": 45.06999969482422,
+    "similarity_level": "Modérée",
+    "model_used": "sentence_transformer",
+    "sectional_scores": {
+        "skills": 52.369998931884766,
+        "experience": 7.670000076293945,
+        "education": 10.09000015258789,
+        "global": 41.43000030517578
+    },
+    "skill_analysis": {
+        "average_skill_similarity": 75.24,
+        "skill_coverage": 57.14,
+        "top_skill_matches": [
+            {
+                "job_skill": "Python",
+                "matched_cv_skill": "Python",
+                "similarity": 1.0
+            },
+            {
+                "job_skill": "SQL",
+                "matched_cv_skill": "SQL",
+                "similarity": 1.0
+            },
+            {
+                "job_skill": "Machine Learning",
+                "matched_cv_skill": "Scikitlearn",
+                "similarity": 0.3968355059623718
+            },
+            {
+                "job_skill": "Deep Learning",
+                "matched_cv_skill": "Scikitlearn",
+                "similarity": 0.4867955446243286
+            },
+            {
+                "job_skill": "NLP",
+                "matched_cv_skill": "NumPy",
+                "similarity": 0.7225570678710938
+            }
+        ]
+    },
+    "weights_applied": {
+        "global_similarity": 0.4,
+        "skills_similarity": 0.35,
+        "experience_similarity": 0.15,
+        "education_similarity": 0.1
+    }
+}
