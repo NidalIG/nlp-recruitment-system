@@ -50,11 +50,11 @@ export default function QuizSection() {
     <div id="quiz" className="space-y-4 animate-fade-in">
       <div className="flex items-center gap-2">
         <Sparkles className="h-5 w-5 text-indigo-600" />
-        <h2 className="text-base font-semibold text-slate-800">Quiz IA (Gemini)</h2>
+        <h2 className="text-base font-semibold text-slate-800">Quiz IA </h2>
       </div>
 
       <div className="card p-4">
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
           <div>
             <label className="text-sm text-slate-600">Niveau</label>
             <select value={level} onChange={e=>setLevel(e.target.value)} className="input">
@@ -70,10 +70,10 @@ export default function QuizSection() {
               <option value="10">10</option>
             </select>
           </div>
-          <div>
+          {/* <div>
             <label className="text-sm text-slate-600">Thème</label>
             <input value={topic} onChange={e=>setTopic(e.target.value)} className="input" placeholder="ex. JavaScript, DevOps, SQL..." />
-          </div>
+          </div> */}
         </div>
         <div className="mt-3 flex gap-2">
           <button onClick={generate} disabled={disabled} className="btn btn-primary disabled:opacity-50">{loading ? <><Loader2 className="h-4 w-4 animate-spin" /> Génération…</> : "Générer le quiz"}</button>
