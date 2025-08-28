@@ -237,7 +237,7 @@ class QuizEvaluator:
             
             return json.loads(response_text)
         except Exception as e:
-            print(f"⚠️  Erreur lors de la vérification Gemini: {e}")
+            print(f" Erreur lors de la vérification Gemini: {e}")
             return {
                 "is_correct_answer_valid": True,
                 "correct_answer_index": question.correct_answer,
@@ -259,7 +259,7 @@ class QuizEvaluator:
         Question: {question.question}
         Réponse de l'utilisateur: {user_answer}
         Réponse correcte: {correct_answer}
-        Résultat: {"✅ Correct" if is_correct else "❌ Incorrect"}
+        Résultat: {" Correct" if is_correct else " Incorrect"}
         
         Créez une explication qui :
         1. Explique pourquoi la réponse correcte est bonne
@@ -268,15 +268,15 @@ class QuizEvaluator:
         4. Reste bienveillante et constructive
         
         Format souhaité:
-        💡 Explication: [votre explication détaillée]
+         Explication: [votre explication détaillée]
         """
         
         try:
             response = self.model.generate_content(prompt)
             return response.text.strip()
         except Exception as e:
-            print(f"⚠️  Erreur génération explication: {e}")
-            return f"💡 Explication: {question.explanation}"
+            print(f" Erreur génération explication: {e}")
+            return f" Explication: {question.explanation}"
     
     @staticmethod
     def evaluate_answers(quiz: Quiz, user_answers: Dict[int, int]) -> QuizResults:
@@ -289,7 +289,7 @@ class QuizEvaluator:
         score = 0
         corrections_made = 0
         
-        print("🔍 Vérification des questions avec Gemini...")
+        print(" Vérification des questions avec Gemini...")
         
         for i, question in enumerate(quiz.questions):
             # Vérification de la question avec Gemini
@@ -297,7 +297,7 @@ class QuizEvaluator:
             
             # Si Gemini détecte une erreur, on corrige
             if not verification["is_correct_answer_valid"]:
-                print(f"⚠️  Question {i+1}: Correction détectée par Gemini")
+                print(f" Question {i+1}: Correction détectée par Gemini")
                 print(f"   Ancienne réponse: {question.options[question.correct_answer]}")
                 print(f"   Nouvelle réponse: {verification['correct_option_text']}")
                 
@@ -329,7 +329,7 @@ class QuizEvaluator:
         percentage = (score / len(quiz.questions)) * 100 if quiz.questions else 0
         
         if corrections_made > 0:
-            print(f"✅ {corrections_made} question(s) corrigée(s) automatiquement par Gemini")
+            print(f" {corrections_made} question(s) corrigée(s) automatiquement par Gemini")
         
         return QuizResults(
             user_answers=results,
@@ -342,12 +342,12 @@ class QuizEvaluator:
         """Affiche les résultats détaillés avec explications Gemini"""
         
         print("=" * 80)
-        print(f"📊 RÉSULTATS DU QUIZ: {quiz.title}")
+        print(f" RÉSULTATS DU QUIZ: {quiz.title}")
         print(f"Score: {results.score}/{results.total_questions} ({results.percentage:.1f}%)")
         print("=" * 80)
         
         for i, (question, result) in enumerate(zip(quiz.questions, results.user_answers)):
-            print(f"\n❓ Question {i+1}: {question.question}")
+            print(f"\n Question {i+1}: {question.question}")
             
             # Affichage des options avec marquage
             for j, option in enumerate(question.options):
