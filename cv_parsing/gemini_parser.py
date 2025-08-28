@@ -1,10 +1,12 @@
 import time
 import google.generativeai as genai
 from cv_parsing.models import CandidateInfo
+import os
+from dotenv import load_dotenv
+load_dotenv()
 
-# Configuration API
-genai.configure(api_key="AIzaSyB143FEjb5OZixvJ21XwnyQPYTls7rth1A")
 
+genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
 PROMPT_TEMPLATE = """Extract the information from the given text extracted from a candidate CV and return a JSON object:
 {'name':'','email':'','phone':'','skills':'','education':'','experience':'','certifications':'','languages':''}
 

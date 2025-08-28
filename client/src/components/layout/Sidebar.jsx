@@ -6,8 +6,8 @@ export default function Sidebar(){
       <ul className="mt-3 space-y-2 text-sm text-slate-700">
         <li><a href="#upload" className="hover:underline">Upload & Parsing</a></li>
         <li><a href="#matching" className="hover:underline">Scoring</a></li>
-        <li><a href="#insights" className="hover:underline">Insights</a></li>
-        <li><a href="#report" className="hover:underline">Export PDF</a></li>
+        {/* <li><a href="#insights" className="hover:underline">Insights</a></li> */}
+        {/* <li><a href="#report" className="hover:underline">Export PDF</a></li> */}
         <li><a href="#chat" className="hover:underline">Chat IA</a></li>
         <li><a href="#quiz" className="hover:underline">Quiz IA (Gemini)</a></li>
       </ul>
