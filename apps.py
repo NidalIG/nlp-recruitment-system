@@ -5,6 +5,8 @@ import tempfile
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from werkzeug.utils import secure_filename
+from quiz_module import QuizGenerator, QuizEvaluator, Quiz, QuizQuestion
+import google.generativeai as genai
 
 # Imports de vos modules existants
 from cv_parsing.extractors import extract_text
@@ -22,6 +24,11 @@ MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
 
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
+# Configuration Gemini pour le quiz
+genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
+model = genai.GenerativeModel('gemini-1.5-flash')
+
+
 # Instance globale du calculateur de similarité
 try:
     similarity_calculator = CVJobEmbeddingSimilarity(model_type="sentence_transformer")
@@ -29,6 +36,13 @@ try:
 except Exception as e:
     print(f"❌ Erreur chargement modèle: {e}")
     similarity_calculator = None
+    
+try:
+    quiz_generator = QuizGenerator(model)
+    print("✅ Générateur de quiz initialisé avec succès")
+except Exception as e:
+    print(f"❌ Erreur initialisation générateur de quiz: {e}")
+    quiz_generator = None    
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
@@ -272,6 +286,158 @@ def generate_detailed_report():
     
     except Exception as e:
         return jsonify({'error': f'Erreur génération rapport: {str(e)}'}), 500
+    
+    
+    
+@app.route('/api/quiz', methods=['POST'])
+def generate_quiz():
+    """Génère un quiz simplifié"""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'Données manquantes'}), 400
+        
+        level = data.get('level', 'moyen')
+        count = data.get('count', 5)
+        
+        # Vérification
+        if not quiz_generator:
+            return jsonify({'error': 'Générateur non disponible'}), 500
+        
+        # Mapping niveau
+        level_map = {
+            'facile': 'débutant',
+            'moyen': 'intermédiaire', 
+            'difficile': 'avancé'
+        }
+        mapped_level = level_map.get(level, 'intermédiaire')
+        
+        # Profil utilisateur générique
+        user_profile = {
+            'name': 'Candidat',
+            'skills': ['JavaScript', 'Python', 'HTML', 'CSS', 'React', 'SQL'],
+            'education': [{'degree': 'Formation développement'}],
+            'experience': [{'title': 'Développeur', 'duration': '2 ans'}]
+        }
+        
+        # Génération du quiz
+        quiz = quiz_generator.generate_quiz(
+            user_profile=user_profile,
+            level=mapped_level,
+            num_questions=count
+        )
+        
+        if not quiz:
+            return jsonify({'error': 'Génération échouée'}), 500
+        
+        # Format pour le frontend
+        questions = []
+        for i, q in enumerate(quiz.questions):
+            # Nettoyer les options (retirer A), B), etc.)
+            clean_choices = []
+            for option in q.options:
+                if ') ' in option:
+                    clean_choices.append(option.split(') ', 1)[1])
+                else:
+                    clean_choices.append(option)
+            
+            questions.append({
+                'id': i,
+                'question': q.question,
+                'choices': clean_choices,
+                'answerIndex': q.correct_answer,
+                'explanation': q.explanation,
+                'skillArea': q.skill_area
+            })
+        
+        return jsonify({
+            'success': True,
+            'questions': questions,
+            'quiz_info': {
+                'title': quiz.title,
+                'description': quiz.description,
+                'estimated_duration': quiz.estimated_duration,
+                'level': level
+            }
+        })
+    
+    except Exception as e:
+        print(f"❌ Erreur génération quiz: {str(e)}")
+        return jsonify({'error': f'Erreur: {str(e)}'}), 500
+
+@app.route('/api/quiz/evaluate', methods=['POST'])
+def evaluate_quiz():
+    """Évalue les réponses du quiz avec Gemini"""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'Données JSON manquantes'}), 400
+
+        answers = data.get('answers', {})  # {questionId: selectedIndex}
+        questions_data = data.get('questions', [])
+
+        if not questions_data:
+            return jsonify({'error': 'Questions manquantes pour l\'évaluation'}), 400
+
+        # 1️⃣ Reconstruire les questions du quiz
+        quiz_questions = []
+        for q in questions_data:
+            question = QuizQuestion(
+                question=q['question'],
+                options=q['choices'],
+                correct_answer=q['answerIndex'],
+                explanation=q.get('explanation', ''),
+                skill_area=q.get('skillArea', 'Général'),
+                difficulty=q.get('difficulty', 'moyen')
+            )
+            quiz_questions.append(question)
+
+        # 2️⃣ Construire un Quiz temporaire
+        quiz = Quiz(
+            title="Évaluation Candidat",
+            description="Quiz évalué par Gemini",
+            level="moyen",
+            questions=quiz_questions,
+            estimated_duration=len(quiz_questions) * 2
+        )
+
+        # 3️⃣ Évaluer avec QuizEvaluator
+        evaluator = QuizEvaluator()
+        # Note : user_answers doit être {index_question: index_reponse}
+        results = evaluator.evaluate_answers(quiz, {i: answers.get(str(q.get('id', i)), -1)
+                                                     for i, q in enumerate(questions_data)})
+
+        # 4️⃣ Préparer le retour JSON détaillé
+        detailed_results = []
+        for i, ua in enumerate(results.user_answers):
+            q = quiz.questions[i]
+            user_answer_index = ua.selected_option
+            user_answer_text = q.options[user_answer_index] if user_answer_index >= 0 else "Aucune réponse"
+            detailed_results.append({
+                'question_id': i,
+                'question': q.question,
+                'user_answer': user_answer_text,
+                'correct_answer': q.options[q.correct_answer],
+                'is_correct': ua.is_correct,
+                'explanation': q.explanation,
+                'skill_area': q.skill_area
+            })
+
+        # 5️⃣ Calcul du feedback basé sur percentage et compétences
+        percentage = results.percentage
+        feedback = generate_feedback(percentage, detailed_results)
+
+        return jsonify({
+            'success': True,
+            'score': results.score,
+            'total': results.total_questions,
+            'percentage': round(results.percentage, 1),
+            'detailed_results': detailed_results,
+            'feedback': feedback
+        })
+
+    except Exception as e:
+        return jsonify({'error': f'Erreur évaluation: {str(e)}'}), 500   
 
 @app.errorhandler(404)
 def not_found(error):
@@ -292,3 +458,4 @@ if __name__ == '__main__':
         port=3001,
         threaded=True
     )
+    
