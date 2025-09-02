@@ -5,13 +5,16 @@ export default function UploadSection({
   setCvText, 
   setFilename, 
   setParsedCv, 
-  parsedCv 
+  parsedCv,
+  jobText,
+  setJobText,
+  lastResult,
+  setLastResult
 }) {
   const [loading, setLoading] = useState(false);
   const [parsing, setParsing] = useState(false);
   const [error, setError] = useState("");
   const [warning, setWarning] = useState("");
-  const [showParsed, setShowParsed] = useState(false);
   const inputRef = useRef(null);
 
   const API_BASE =
@@ -124,7 +127,6 @@ export default function UploadSection({
 
       const data = await res.json();
       setParsedCv?.(data.parsed_cv);
-      setShowParsed(true);
 
     } catch (err) {
       let msg;
@@ -139,131 +141,157 @@ export default function UploadSection({
     }
   }
 
-  return (
-    <div id="upload" className="space-y-4 animate-fade-in">
-      <h2 className="text-base font-semibold text-slate-800">Upload & Parsing</h2>
+  async function computeMatching() {
+    setError("");
+    const matchingLoading = true;
+    
+    try {
+      const res = await fetch(`${API_BASE}/api/match`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cvText, jobText }),
+      });
+      
+      if (!res.ok) {
+        const errorData = await res.text();
+        let errorMsg;
+        try {
+          const errorJson = JSON.parse(errorData);
+          errorMsg = errorJson.error || "Erreur calcul matching";
+        } catch {
+          errorMsg = `Erreur calcul matching (HTTP ${res.status})`;
+        }
+        throw new Error(errorMsg);
+      }
 
-      <div className="flex items-center gap-3">
-        <input
-          ref={inputRef}
-          id="cvfile"
-          type="file"
-          accept=".pdf,.txt,.docx,application/pdf,text/plain,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-          onChange={onFile}
-          className="input file:mr-3 file:rounded-md file:border-0 file:bg-slate-900 file:px-3 file:py-2 file:text-white hover:file:bg-slate-800"
-        />
-        {loading && <span className="text-sm text-slate-500">Extraction…</span>}
-        {parsing && <span className="text-sm text-blue-500">Parsing structuré…</span>}
+      const data = await res.json();
+
+      setLastResult({
+        score: Math.round((data.score || 0) * 100) / 100,
+        similarity_level: data.similarity_level || "Calculé",
+        sectional_scores: data.sectional_scores || {},
+        skill_analysis: data.skill_analysis || {},
+        missing_keywords: data.missing_keywords || [],
+        suggestions: data.suggestions || [],
+        method: data.method || "Embedding similarity",
+        parsed_cv: data.parsed_cv,
+        parsed_job: data.parsed_job
+      });
+
+    } catch (err) {
+      let msg;
+      if (err?.message?.includes('Failed to fetch')) {
+        msg = "Impossible de se connecter au serveur. Vérifiez qu'il est démarré sur le port 3001.";
+      } else {
+        msg = err.message || "Impossible de calculer le score. Vérifiez les textes et réessayez.";
+      }
+      setError(msg);
+    }
+  }
+
+  return (
+    <div className="space-y-6 animate-fade-in">
+      {/* Titre principal */}
+      <div className="text-center">
+        <h1 className="text-2xl font-bold text-slate-800 mb-2">Upload Candidate Profile and Job Description</h1>
+        <p className="text-slate-600">Téléchargez un CV et saisissez la description du poste pour analyser la compatibilité</p>
       </div>
 
-      {error && (
-        <div className="rounded-2xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
-          ❌ {error}
-        </div>
-      )}
-
-      {warning && !error && (
-        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
-          ⚠️ {warning}
-        </div>
-      )}
-
-        <div className="mb-3 flex items-center justify-between">
-          {/* <label className="text-sm font-medium text-slate-600">
-            Texte extrait du CV
-          </label> */}
-          {cvText && (
-            <button
-              onClick={() => parseCV()}
-              disabled={parsing}
-              className="btn btn-sm btn-secondary"
-            >
-              {/* {parsing ? "Parsing..." : "📋 Parser structure"} */}
-            </button>
-          )}
-        </div>
-        
-        {/* <textarea
-          value={cvText}
-          onChange={(e) => setCvText(e.target.value)}
-          rows={8}
-          placeholder="Le texte du CV sera affiché ici après l'upload..."
-          className="input"
-        /> */}
-     
-
-      {/* Résultat du parsing structuré 
-      
-      {parsedCv && (
-        <div className="card p-4">
-          <div className="mb-3 flex items-center justify-between">
-            <label className="text-sm font-medium text-slate-600">
-               Données structurées extraites
-            </label>
-            <button
-              onClick={() => setShowParsed(!showParsed)}
-              className="btn btn-sm"
-            >
-              {showParsed ? "Masquer" : "Afficher"}
-            </button>
-          </div>
+      {/* Section Upload côte à côte */}
+      <div className="card p-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           
-          {showParsed && (
-            <div className="space-y-3">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <strong>👤 Nom:</strong> {parsedCv.name || "N/A"}
-                </div>
-                <div>
-                  <strong>📧 Email:</strong> {parsedCv.email || "N/A"}
-                </div>
-                <div>
-                  <strong>📞 Téléphone:</strong> {parsedCv.phone || "N/A"}
+          {/* Upload Resume - Gauche */}
+          <div className="space-y-4">
+            <h3 className="text-lg font-semibold text-slate-700">Upload Resume</h3>
+            
+            {/* Zone de drag & drop stylisée */}
+            <div className="relative">
+              <input
+                ref={inputRef}
+                id="cvfile"
+                type="file"
+                accept=".pdf,.txt,.docx,application/pdf,text/plain,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                onChange={onFile}
+                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+              />
+              <div className="border-2 border-dashed border-slate-300 rounded-lg p-8 text-center hover:border-blue-400 hover:bg-blue-50/50 transition-colors">
+                <div className="space-y-3">
+                  <div className="w-16 h-16 mx-auto bg-slate-100 rounded-full flex items-center justify-center">
+                    <svg className="w-8 h-8 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                    </svg>
+                  </div>
+                  <div>
+                    <p className="text-slate-600 font-medium">Drag and drop file here</p>
+                    <p className="text-sm text-slate-500">Limit 200MB per file • PDF</p>
+                  </div>
                 </div>
               </div>
-              
-              {parsedCv.skills?.length > 0 && (
-                <div>
-                  <strong>🛠️ Compétences:</strong>
-                  <div className="flex flex-wrap gap-2 mt-2">
-                    {parsedCv.skills.map((skill, idx) => (
-                      <span key={idx} className="badge bg-blue-100 text-blue-800">
-                        {skill}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
-              
-              {parsedCv.experience?.length > 0 && (
-                <div>
-                  <strong>💼 Expérience:</strong>
-                  <div className="mt-2 space-y-2">
-                    {parsedCv.experience.slice(0, 2).map((exp, idx) => (
-                      <div key={idx} className="text-sm bg-slate-50 p-2 rounded">
-                        <strong>{exp.job_title}</strong> chez {exp.company_name} ({exp.years_worked})
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-              
-              {parsedCv.education?.length > 0 && (
-                <div>
-                  <strong>🎓 Formation:</strong>
-                  <div className="mt-2 space-y-1">
-                    {parsedCv.education.map((edu, idx) => (
-                      <div key={idx} className="text-sm">
-                        {edu.degree} - {edu.institution_name} ({edu.graduation_year})
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
             </div>
-          )}
+            
+            <button
+              onClick={() => inputRef.current?.click()}
+              className="w-full btn btn-outline"
+            >
+              Browse files
+            </button>
+            
+            {loading && (
+              <div className="text-sm text-blue-600 text-center">
+                📄 Extraction en cours...
+              </div>
+            )}
+            
+            {parsing && (
+              <div className="text-sm text-blue-600 text-center">
+                ⚙️ Analyse du CV...
+              </div>
+            )}
+          </div>
+
+          {/* Upload Job Description - Droite */}
+          <div className="space-y-4">
+            <h3 className="text-lg font-semibold text-slate-700">Upload Job Description</h3>
+            
+            <textarea
+              value={jobText}
+              onChange={(e) => setJobText(e.target.value)}
+              rows={8}
+              placeholder="Collez ici la description du poste..."
+              className="w-full p-4 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none"
+            />
+            
+            <div className="text-sm text-slate-500 text-center">
+              Ou glissez-déposez un fichier de description de poste
+            </div>
+          </div>
         </div>
-      )} */}
+
+        {/* Messages d'erreur/warning */}
+        {error && (
+          <div className="mt-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+            ❌ {error}
+          </div>
+        )}
+
+        {warning && !error && (
+          <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+            ⚠️ {warning}
+          </div>
+        )}
+
+        {/* Bouton de matching */}
+        <div className="mt-6 text-center">
+          <button
+            onClick={computeMatching}
+            disabled={!cvText.trim() || !jobText.trim()}
+            className="btn btn-primary btn-lg px-8"
+          >
+            Analyser la compatibilité
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

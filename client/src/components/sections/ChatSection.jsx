@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Send, Loader2, Bot, User, Trash2, Copy, Check } from "lucide-react";
+import { Send, Loader2, Bot, User, Trash2, Copy, Check, MessageSquare } from "lucide-react";
 
 export default function ChatSection({
   apiUrl = "/api/chat",
@@ -9,8 +9,7 @@ export default function ChatSection({
     {
       id: crypto.randomUUID(),
       role: "assistant",
-      content:
-        "Bonjour ! Je suis votre assistant IA. Si vous voulez un **quiz**, rendez-vous à la section *Quiz IA (Gemini)* ci-dessous.",
+      content: "Bonjour ! Je suis votre assistant IA spécialisé en recrutement. Comment puis-je vous aider aujourd'hui ?",
     },
   ]);
   const [input, setInput] = useState("");
@@ -68,76 +67,80 @@ export default function ChatSection({
 
   function onSubmit(e) { e.preventDefault(); void sendMessage(input); }
   function handleKeyDown(e) { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void sendMessage(input); } }
-  function clearChat() { setMessages([{ id: crypto.randomUUID(), role: "assistant", content: "Nouveau chat." }]); setError(""); inputRef.current?.focus(); }
+  function clearChat() { setMessages([{ id: crypto.randomUUID(), role: "assistant", content: "Nouveau chat démarré ! Comment puis-je vous aider ?" }]); setError(""); inputRef.current?.focus(); }
   async function copyMessage(id, text) { try { await navigator.clipboard.writeText(text); setCopiedId(id); setTimeout(() => setCopiedId(null), 1200); } catch (_) {} }
 
   return (
-    <div id="chat" className="flex h-[480px] w-full flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-soft animate-fade-in">
-      <div className="flex items-center justify-between gap-3 border-b border-slate-200 p-3 md:p-4">
-        <div className="flex items-center gap-2">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-600/10">
-            <Bot className="h-5 w-5 text-blue-600" />
+    <div className="h-[600px] w-full flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-soft animate-fade-in">
+      {/* Header avec design amélioré */}
+      <div className="flex items-center justify-between gap-3 border-b border-slate-200 bg-gradient-to-r from-purple-600 to-blue-600 p-4">
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/20">
+            <MessageSquare className="h-5 w-5 text-white" />
           </div>
           <div>
-            <h2 className="text-sm font-semibold leading-tight md:text-base">Assistant IA</h2>
-            <p className="text-xs text-slate-500">Chat</p>
+            <h2 className="text-base font-semibold leading-tight text-white">Ask Vira</h2>
+            <p className="text-xs text-purple-100">Votre Virtual AI Recruiter</p>
           </div>
         </div>
         <button
           onClick={clearChat}
-          className="btn btn-outline"
-          title="Effacer la conversation"
+          className="flex items-center gap-2 rounded-lg bg-white/20 px-3 py-2 text-xs text-white hover:bg-white/30 transition-colors"
+          title="Nouveau chat"
         >
           <Trash2 className="h-4 w-4" />
-          Réinitialiser
+          Nouveau
         </button>
       </div>
 
-      <div ref={listRef} className="flex-1 space-y-3 overflow-y-auto p-3 md:p-4">
+      {/* Messages avec background adapté */}
+      <div ref={listRef} className="flex-1 space-y-3 overflow-y-auto bg-gradient-to-b from-purple-50/30 to-blue-50/30 p-4">
         {messages.map((m) => (
           <MessageBubble key={m.id} m={m} onCopy={copyMessage} copiedId={copiedId} />
         ))}
         {loading && (
-          <div className="flex items-start gap-2">
-            <div className="mt-1 flex h-8 w-8 items-center justify-center rounded-full bg-blue-600/10">
-              <Bot className="h-4 w-4 text-blue-600" />
+          <div className="flex items-start gap-3">
+            <div className="mt-1 flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-r from-purple-600/10 to-blue-600/10">
+              <Bot className="h-5 w-5 text-purple-600" />
             </div>
-            <div className="max-w-[85%] rounded-2xl rounded-tl-none border border-blue-100 bg-blue-50 px-3 py-2 text-sm text-slate-700">
-              <div className="flex items-center gap-2 text-blue-700">
+            <div className="max-w-[80%] rounded-2xl rounded-tl-none border border-purple-100 bg-gradient-to-r from-purple-50 to-blue-50 px-4 py-3 text-sm text-slate-700">
+              <div className="flex items-center gap-2 text-purple-700">
                 <Loader2 className="h-4 w-4 animate-spin" />
-                L'IA rédige une réponse...
+                Vira rédige une réponse...
               </div>
             </div>
           </div>
         )}
       </div>
 
+      {/* Zone d'erreur */}
       {error && (
-        <div className="mx-3 mb-2 rounded-2xl border border-red-200 bg-red-50 p-2 text-xs text-red-700 md:mx-4">
-          {error}
+        <div className="mx-4 mb-2 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+          ❌ {error}
         </div>
       )}
 
-      <form onSubmit={onSubmit} className="border-t border-slate-200 p-3 md:p-4">
-        <div className="flex items-end gap-2">
-          <div className="mb-1 hidden h-8 w-8 items-center justify-center rounded-full bg-slate-900 text-white sm:flex">
+      {/* Input avec design amélioré */}
+      <form onSubmit={onSubmit} className="border-t border-slate-200 bg-white p-4">
+        <div className="flex items-end gap-3">
+          <div className="mb-1 hidden h-9 w-9 items-center justify-center rounded-full bg-gradient-to-r from-slate-800 to-slate-900 text-white sm:flex">
             <User className="h-4 w-4" />
           </div>
-          <div className="relative w-full">
+          <div className="relative flex-1">
             <textarea
               ref={inputRef}
               rows={1}
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Écrivez votre message. Shift+Entrée = nouvelle ligne"
-              className="input max-h-40 resize-none"
+              placeholder="Posez votre question à Vira..."
+              className="w-full resize-none rounded-xl border border-slate-200 px-4 py-3 text-sm focus:border-purple-300 focus:outline-none focus:ring-2 focus:ring-purple-100"
             />
           </div>
           <button
             type="submit"
             disabled={loading || !input.trim()}
-            className="btn btn-primary disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-purple-600 to-blue-600 px-4 py-3 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50 hover:shadow-lg transition-all"
             aria-label="Envoyer"
           >
             {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
@@ -152,23 +155,25 @@ export default function ChatSection({
 function MessageBubble({ m, onCopy, copiedId }) {
   const isUser = m.role === "user";
   return (
-    <div className={`flex items-start gap-2 ${isUser ? "justify-end" : ""}`}>
+    <div className={`flex items-start gap-3 ${isUser ? "justify-end" : ""}`}>
       {!isUser && (
-        <div className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-600/10">
-          <Bot className="h-4 w-4 text-blue-600" />
+        <div className="mt-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-r from-purple-600/10 to-blue-600/10">
+          <Bot className="h-5 w-5 text-purple-600" />
         </div>
       )}
 
       <div
-        className={`group relative max-w-[85%] whitespace-pre-wrap rounded-2xl px-3 py-2 text-sm shadow-soft ${
-          isUser ? "rounded-tr-none bg-slate-900 text-white" : "rounded-tl-none border border-slate-200 bg-white text-slate-800"
+        className={`group relative max-w-[80%] whitespace-pre-wrap rounded-2xl px-4 py-3 text-sm shadow-sm ${
+          isUser 
+            ? "rounded-tr-none bg-gradient-to-r from-slate-800 to-slate-900 text-white" 
+            : "rounded-tl-none border border-slate-200 bg-white text-slate-800"
         }`}
       >
         {m.content}
         {!isUser && (
           <button
             onClick={() => onCopy(m.id, m.content)}
-            className={`absolute -right-2 -top-2 hidden rounded-full border bg-white p-1 text-slate-500 shadow-soft transition hover:text-slate-700 group-hover:inline-flex ${
+            className={`absolute -right-2 -top-2 hidden rounded-full border bg-white p-1.5 text-slate-500 shadow-sm transition hover:text-slate-700 group-hover:inline-flex ${
               copiedId === m.id ? "border-green-200 bg-green-50" : "border-slate-200"
             }`}
             title="Copier"
@@ -179,8 +184,8 @@ function MessageBubble({ m, onCopy, copiedId }) {
       </div>
 
       {isUser && (
-        <div className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-900 text-white">
-          <User className="h-4 w-4" />
+        <div className="mt-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-r from-slate-800 to-slate-900 text-white">
+          <User className="h-5 w-5" />
         </div>
       )}
     </div>
