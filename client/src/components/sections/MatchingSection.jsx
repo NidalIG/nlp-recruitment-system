@@ -1,11 +1,11 @@
 import React, { useState } from "react";
 import ProgressCircle from "../ui/ProgressCircle.jsx";
 
-export default function MatchingSection({ 
-  lastResult,
-  parsedCv 
-}) {
+export default function MatchingSection({ parsedCv, lastResult }) {
   const [showDetails, setShowDetails] = useState(false);
+
+  // On utilise directement lastResult passé en props au lieu du hook
+  if (!lastResult) return null;
 
   const getScoreColor = (score) => {
     if (score >= 85) return "text-green-600";
@@ -21,20 +21,14 @@ export default function MatchingSection({
     return "bg-red-50 border-red-200";
   };
 
-  // Si pas de résultat, ne rien afficher
-  if (!lastResult) {
-    return null;
-  }
-
   return (
     <div className="space-y-4 animate-fade-in">
       <h2 className="text-xl font-bold text-slate-800 text-center">Résultats de l'analyse</h2>
-      
-      {/* Section Résultats */}
+
       <div className={`card p-6 space-y-4 ${getScoreBackground(lastResult.score)}`}>
         <div className="flex items-center justify-center gap-6">
-<ProgressCircle value={lastResult?.score ?? 0}  />         
- <div className="text-center">
+          <ProgressCircle value={lastResult?.score ?? 0} />
+          <div className="text-center">
             <div className={`text-3xl font-bold ${getScoreColor(lastResult.score)}`}>
               {lastResult.score}%
             </div>
@@ -48,7 +42,7 @@ export default function MatchingSection({
         </div>
 
         {/* Scores sectionnels */}
-        {lastResult?.sectional_scores && (
+        {lastResult.sectional_scores && Object.keys(lastResult.sectional_scores).length > 0 && (
           <div>
             <button
               onClick={() => setShowDetails(!showDetails)}
@@ -56,44 +50,29 @@ export default function MatchingSection({
             >
               Scores détaillés {showDetails ? "▼" : "▶"}
             </button>
-            
             {showDetails && (
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                <div className="text-center p-3 bg-white rounded-lg border">
-                  <div className="font-semibold text-slate-700">Global</div>
-                  <div className="text-2xl font-bold text-blue-600">
-                    {lastResult.sectional_scores.global || 0}%
+                {["global", "skills", "experience", "education"].map((key) => (
+                  <div key={key} className="text-center p-3 bg-white rounded-lg border">
+                    <div className="font-semibold text-slate-700">{key.charAt(0).toUpperCase() + key.slice(1)}</div>
+                    <div className={`text-2xl font-bold ${
+                      key === "global" ? "text-blue-600" :
+                      key === "skills" ? "text-green-600" :
+                      key === "experience" ? "text-purple-600" : "text-indigo-600"
+                    }`}>
+                      {lastResult.sectional_scores[key] || 0}%
+                    </div>
                   </div>
-                </div>
-                <div className="text-center p-3 bg-white rounded-lg border">
-                  <div className="font-semibold text-slate-700">Compétences</div>
-                  <div className="text-2xl font-bold text-green-600">
-                    {lastResult.sectional_scores.skills || 0}%
-                  </div>
-                </div>
-                <div className="text-center p-3 bg-white rounded-lg border">
-                  <div className="font-semibold text-slate-700">Expérience</div>
-                  <div className="text-2xl font-bold text-purple-600">
-                    {lastResult.sectional_scores.experience || 0}%
-                  </div>
-                </div>
-                <div className="text-center p-3 bg-white rounded-lg border">
-                  <div className="font-semibold text-slate-700">Formation</div>
-                  <div className="text-2xl font-bold text-indigo-600">
-                    {lastResult.sectional_scores.education || 0}%
-                  </div>
-                </div>
+                ))}
               </div>
             )}
           </div>
         )}
 
-        {/* Analyse des compétences */}
-        {lastResult?.skill_analysis && (
+        {/* Analyse compétences */}
+        {lastResult.skill_analysis && Object.keys(lastResult.skill_analysis).length > 0 && (
           <div className="bg-white p-4 rounded-lg border">
-            <div className="mb-3 text-base font-semibold text-slate-700">
-              Analyse des compétences
-            </div>
+            <div className="mb-3 text-base font-semibold text-slate-700">Analyse des compétences</div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
               <div className="flex justify-between">
                 <span>Similarité moyenne:</span>
@@ -108,7 +87,7 @@ export default function MatchingSection({
                 </strong>
               </div>
             </div>
-            
+
             {lastResult.skill_analysis.top_skill_matches?.length > 0 && showDetails && (
               <div className="mt-4">
                 <div className="text-sm text-slate-600 mb-2">Top correspondances:</div>
@@ -128,17 +107,12 @@ export default function MatchingSection({
         )}
 
         {/* Compétences à développer */}
-        {lastResult?.missing_keywords?.length > 0 && (
+        {lastResult.missing_keywords?.length > 0 && (
           <div className="bg-white p-4 rounded-lg border">
-            <div className="mb-3 text-base font-semibold text-slate-700">
-              Compétences à développer
-            </div>
+            <div className="mb-3 text-base font-semibold text-slate-700">Compétences à développer</div>
             <div className="flex flex-wrap gap-2">
               {lastResult.missing_keywords.slice(0, 12).map((keyword, i) => (
-                <span
-                  key={i}
-                  className="badge border-amber-200 bg-amber-50 text-amber-700 px-3 py-1"
-                >
+                <span key={i} className="badge border-amber-200 bg-amber-50 text-amber-700 px-3 py-1">
                   {keyword}
                 </span>
               ))}
@@ -152,11 +126,9 @@ export default function MatchingSection({
         )}
 
         {/* Suggestions */}
-        {lastResult?.suggestions?.length > 0 && (
+        {lastResult.suggestions?.length > 0 && (
           <div className="bg-white p-4 rounded-lg border">
-            <div className="mb-3 text-base font-semibold text-slate-700">
-              Suggestions d'amélioration
-            </div>
+            <div className="mb-3 text-base font-semibold text-slate-700">Suggestions d'amélioration</div>
             <ul className="list-disc space-y-2 pl-5 text-sm text-slate-700">
               {lastResult.suggestions.map((suggestion, i) => (
                 <li key={i}>{suggestion}</li>
