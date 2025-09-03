@@ -1,12 +1,14 @@
-// MyCareerAILanding.jsx
+// src/components/layout/MyCareerAILanding.jsx
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Bot, Users, MessageCircle, GraduationCap, Clock, Shield, Zap, ChevronRight, Brain, Target } from 'lucide-react';
+import { useAuth } from '../../contexts/AuthContext';
 
 const HomePage = () => {
   const navigate = useNavigate();
+  const { user } = useAuth(); // récupération de l'utilisateur connecté
   const [isVisible, setIsVisible] = useState(false);
-
+  
   useEffect(() => {
     setIsVisible(true);
   }, []);
@@ -60,7 +62,6 @@ const HomePage = () => {
     <div className="min-h-screen bg-gray-900 text-white overflow-hidden">
       {/* Hero Section */}
       <section className="relative pt-20 pb-32 overflow-hidden">
-        {/* Background Animation */}
         <div className="absolute inset-0 bg-gradient-to-br from-gray-900 via-blue-900/20 to-purple-900/20">
           <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl animate-pulse"></div>
           <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-purple-500/10 rounded-full blur-3xl animate-pulse delay-1000"></div>
@@ -81,17 +82,20 @@ const HomePage = () => {
           </p>
           
           <div className="flex flex-col sm:flex-row items-center justify-center space-y-4 sm:space-y-0 sm:space-x-6">
-            {/* Get Started → Register */}
+            {/* Get Started → Register or user space */}
             <button 
-              onClick={() => navigate('/register')} 
+              onClick={() => user ? navigate(`/app/${user.id}`) : navigate('/register')} 
               className="px-8 py-4 bg-gradient-to-r from-blue-500 to-purple-600 rounded-xl font-semibold text-lg hover:from-blue-600 hover:to-purple-700 transition-all duration-200 transform hover:scale-105 shadow-2xl hover:shadow-3xl flex items-center space-x-2"
             >
               <span>Get Started</span>
               <ChevronRight className="w-5 h-5" />
             </button>
 
-            {/* Sign In → Login */}
-            <button className="px-8 py-4 border border-gray-600 rounded-xl font-semibold text-lg hover:border-gray-400 hover:bg-gray-800/50 transition-all duration-200 transform hover:scale-105">
+            {/* Watch Demo → si connecté → espace utilisateur */}
+            <button 
+              onClick={() => user ? navigate(`/app/${user.id}`) : navigate('/login')} 
+              className="px-8 py-4 border border-gray-600 rounded-xl font-semibold text-lg hover:border-gray-400 hover:bg-gray-800/50 transition-all duration-200 transform hover:scale-105"
+            >
               Watch Demo
             </button>
           </div>
@@ -187,7 +191,7 @@ const HomePage = () => {
             Join thousands of companies already using My Career AI to find the perfect candidates.
           </p>
           <button 
-            onClick={() => navigate('/register')}
+            onClick={() => user ? navigate(`/app/${user.id}`) : navigate('/register')}
             className="px-10 py-4 bg-gradient-to-r from-blue-500 to-purple-600 rounded-xl font-semibold text-lg hover:from-blue-600 hover:to-purple-700 transition-all duration-200 transform hover:scale-105 shadow-2xl hover:shadow-3xl"
           >
             Start Your Free Trial

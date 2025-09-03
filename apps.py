@@ -65,6 +65,15 @@ except Exception as e:
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
+def save_result_to_db(user_id, result_type, data, meta=None, refs=None):
+    """Helper pour sauvegarder automatiquement les résultats"""
+    try:
+        result = create_result(user_id, result_type, data, meta, refs)
+        db.results.insert_one(result)
+        print(f"✅ Résultat {result_type} sauvegardé pour user {user_id}")
+    except Exception as e:
+        print(f"❌ Erreur sauvegarde résultat: {e}")
+
 # -------------------- AUTH --------------------
 @app.route('/api/auth/register', methods=['POST'])
 def register():
@@ -91,8 +100,24 @@ def register():
         'lastName': lastName,
         'createdAt': datetime.now(timezone.utc).isoformat()
     }
-    users_collection.insert_one(user)
-    return jsonify({'success': True, 'message': 'Utilisateur créé avec succès'}), 201
+    result = users_collection.insert_one(user)
+
+    # Génération du token JWT
+    access_token = create_access_token(
+        identity=str(result.inserted_id),
+        expires_delta=timedelta(hours=1)
+    )
+
+    return jsonify({
+        'success': True,
+        'message': 'Utilisateur créé avec succès',
+        'accessToken': access_token,
+        'user': {
+            'email': email,
+            'firstName': firstName,
+            'lastName': lastName
+        }
+    }), 201
 
 
 @app.route('/api/auth/login', methods=['POST'])
@@ -248,6 +273,7 @@ def upload_file():
         return jsonify({'error': f'Erreur serveur: {str(e)}'}), 500
 
 @app.route('/api/parse-cv', methods=['POST'])
+@jwt_required()
 def parse_cv():
     """Parse structuré d'un CV avec Gemini"""
     try:
@@ -270,6 +296,18 @@ def parse_cv():
             except json.JSONDecodeError:
                 return jsonify({'error': 'Erreur de parsing JSON'}), 500
         
+        # 🎯 SAUVEGARDE AUTOMATIQUE CV
+        user_id = get_jwt_identity()
+        save_result_to_db(
+            user_id=user_id,
+            result_type="cv",
+            data=parsed_data,
+            meta={
+                "source": "gemini_parser",
+                "original_text_length": len(cv_text)
+            }
+        )
+        
         return jsonify({
             'parsed_cv': parsed_data,
             'success': True
@@ -279,6 +317,7 @@ def parse_cv():
         return jsonify({'error': f'Erreur parsing CV: {str(e)}'}), 500
 
 @app.route('/api/parse-job', methods=['POST'])
+@jwt_required()
 def parse_job_description():
     """Parse structuré d'une job description"""
     try:
@@ -294,6 +333,18 @@ def parse_job_description():
         # Parsing de la job description
         parsed_job = parse_job(job_text)
         
+        # 🎯 SAUVEGARDE AUTOMATIQUE JOB
+        user_id = get_jwt_identity()
+        save_result_to_db(
+            user_id=user_id,
+            result_type="job",
+            data=parsed_job,
+            meta={
+                "source": "job_parser",
+                "original_text_length": len(job_text)
+            }
+        )
+        
         return jsonify({
             'parsed_job': parsed_job,
             'success': True
@@ -303,6 +354,7 @@ def parse_job_description():
         return jsonify({'error': f'Erreur parsing job: {str(e)}'}), 500
 
 @app.route('/api/match', methods=['POST'])
+@jwt_required()
 def calculate_matching():
     """Calcul du score de matching entre CV et job"""
     try:
@@ -367,7 +419,8 @@ def calculate_matching():
             if missing_keywords:
                 suggestions.append(f"Considérez d'acquérir ces compétences: {', '.join(missing_keywords[:3])}")
             
-            return jsonify({
+            # Préparer les données de réponse
+            matching_data = {
                 'score': similarity_result.get('overall_similarity_score', 0),
                 'similarity_level': similarity_result.get('similarity_level', 'Calculé'),
                 'sectional_scores': similarity_result.get('sectional_scores', {}),
@@ -378,7 +431,27 @@ def calculate_matching():
                 'parsed_cv': parsed_cv,
                 'parsed_job': parsed_job,
                 'success': True
-            })
+            }
+            
+            # 🎯 SAUVEGARDE AUTOMATIQUE MATCHING
+            user_id = get_jwt_identity()
+            save_result_to_db(
+                user_id=user_id,
+                result_type="matching",
+                data=matching_data,
+                meta={
+                    "model_used": similarity_result.get("model_used", "sentence_transformer"),
+                    "cv_text_length": len(cv_text),
+                    "job_text_length": len(job_text)
+                },
+                refs={
+                    "cv_skills_count": len(cv_skills),
+                    "job_skills_count": len(job_skills),
+                    "missing_skills_count": len(missing_keywords)
+                }
+            )
+            
+            return jsonify(matching_data)
         
         except Exception as e:
             return jsonify({'error': f'Erreur calcul similarité: {str(e)}'}), 500
@@ -421,11 +494,12 @@ def generate_detailed_report():
     except Exception as e:
         return jsonify({'error': f'Erreur génération rapport: {str(e)}'}), 500
     
-    
-    
+
+
 @app.route('/api/quiz', methods=['POST'])
+@jwt_required()
 def generate_quiz():
-    """Génère un quiz simplifié"""
+    """Génère un quiz basé sur le profil utilisateur réel (CV parsé)"""
     try:
         data = request.get_json()
         if not data:
@@ -433,6 +507,7 @@ def generate_quiz():
         
         level = data.get('level', 'moyen')
         count = data.get('count', 5)
+        user_id = get_jwt_identity()
         
         # Vérification
         if not quiz_generator:
@@ -446,15 +521,10 @@ def generate_quiz():
         }
         mapped_level = level_map.get(level, 'intermédiaire')
         
-        # Profil utilisateur générique
-        user_profile = {
-            'name': 'Candidat',
-            'skills': ['JavaScript', 'Python', 'HTML', 'CSS', 'React', 'SQL'],
-            'education': [{'degree': 'Formation développement'}],
-            'experience': [{'title': 'Développeur', 'duration': '2 ans'}]
-        }
+        # 🔥 RÉCUPÉRATION DU PROFIL UTILISATEUR RÉEL
+        user_profile = get_user_profile_from_cv(user_id)
         
-        # Génération du quiz
+        # Génération du quiz avec le profil réel
         quiz = quiz_generator.generate_quiz(
             user_profile=user_profile,
             level=mapped_level,
@@ -484,25 +554,142 @@ def generate_quiz():
                 'skillArea': q.skill_area
             })
         
-        return jsonify({
+        quiz_data = {
             'success': True,
             'questions': questions,
             'quiz_info': {
                 'title': quiz.title,
                 'description': quiz.description,
                 'estimated_duration': quiz.estimated_duration,
-                'level': level
+                'level': level,
+                'profile_used': user_profile.get('name', 'Utilisateur'),
+                'skills_detected': len(user_profile.get('skills', []))
             }
-        })
+        }
+        
+        # 🎯 SAUVEGARDE AUTOMATIQUE QUIZ
+        save_result_to_db(
+            user_id=user_id,
+            result_type="quiz",
+            data=quiz_data,
+            meta={
+                "level": level,
+                "mapped_level": mapped_level,
+                "questions_count": count,
+                "generated_questions": len(questions),
+                "profile_source": "cv_parsing"
+            }
+        )
+        
+        return jsonify(quiz_data)
     
     except Exception as e:
         print(f"❌ Erreur génération quiz: {str(e)}")
         return jsonify({'error': f'Erreur: {str(e)}'}), 500
 
-def generate_feedback(percentage, detailed_results):
-    raise NotImplementedError
+
+def get_user_profile_from_cv(user_id):
+    """Récupère le profil utilisateur depuis les CV parsés"""
+    try:
+        # Récupération du dernier CV parsé de l'utilisateur
+        latest_cv = db.results.find_one(
+            {"user": ObjectId(user_id), "type": "cv"},
+            sort=[("createdAt", -1)]
+        )
+        
+        if latest_cv and latest_cv.get('data'):
+            cv_data = latest_cv['data']
+            
+            # Si c'est un CV parsé, extraire les données structurées
+            if isinstance(cv_data, dict) and 'parsed_cv' in cv_data:
+                cv_parsed = cv_data['parsed_cv']
+            else:
+                cv_parsed = cv_data
+            
+            # Construction du profil pour le générateur de quiz
+            user_profile = {
+                'name': cv_parsed.get('name', 'Candidat'),
+                'skills': cv_parsed.get('skills', []),
+                'education': cv_parsed.get('education', []),
+                'experience': cv_parsed.get('experience', []),
+                'languages': cv_parsed.get('languages', []),
+                'certifications': cv_parsed.get('certifications', [])
+            }
+            
+            print(f"✅ Profil utilisateur récupéré: {user_profile.get('name')} avec {len(user_profile.get('skills', []))} compétences")
+            return user_profile
+            
+        else:
+            print(f"⚠️ Aucun CV trouvé pour l'utilisateur {user_id}, utilisation du profil par défaut")
+            # Récupération du profil utilisateur basique depuis la collection users
+            user = users_collection.find_one({'_id': ObjectId(user_id)})
+            
+            return {
+                'name': f"{user.get('firstName', '')} {user.get('lastName', '')}".strip() or 'Candidat',
+                'skills': ['Développement', 'Programmation', 'Informatique'],
+                'education': [{'degree': 'Formation générale'}],
+                'experience': [{'title': 'Expérience professionnelle', 'duration': 'Variable'}],
+                'languages': ['Français'],
+                'certifications': []
+            }
+            
+    except Exception as e:
+        print(f"❌ Erreur récupération profil: {str(e)}")
+        
+        # Profil de fallback en cas d'erreur
+        return {
+            'name': 'Candidat',
+            'skills': ['JavaScript', 'Python', 'HTML', 'CSS', 'React'],
+            'education': [{'degree': 'Formation développement'}],
+            'experience': [{'title': 'Développeur', 'duration': '2 ans'}],
+            'languages': ['Français'],
+            'certifications': []
+        }
+
+
+@app.route('/api/quiz/profile-status', methods=['GET'])
+@jwt_required()
+def get_quiz_profile_status():
+    """Retourne des informations sur le profil utilisateur pour les quiz"""
+    try:
+        user_id = get_jwt_identity()
+        
+        # Vérifier s'il y a un CV parsé
+        latest_cv = db.results.find_one(
+            {"user": ObjectId(user_id), "type": "cv"},
+            sort=[("createdAt", -1)]
+        )
+        
+        if latest_cv:
+            cv_data = latest_cv.get('data', {})
+            if isinstance(cv_data, dict) and 'parsed_cv' in cv_data:
+                cv_parsed = cv_data['parsed_cv']
+            else:
+                cv_parsed = cv_data
+                
+            return jsonify({
+                'has_cv': True,
+                'profile_name': cv_parsed.get('name', 'Candidat'),
+                'skills_count': len(cv_parsed.get('skills', [])),
+                'experience_count': len(cv_parsed.get('experience', [])),
+                'last_updated': latest_cv.get('createdAt'),
+                'recommendation': 'Quiz personnalisé basé sur votre CV'
+            })
+        else:
+            return jsonify({
+                'has_cv': False,
+                'profile_name': 'Profil générique',
+                'skills_count': 5,
+                'experience_count': 1,
+                'last_updated': None,
+                'recommendation': 'Uploadez votre CV pour des quiz personnalisés'
+            })
+            
+    except Exception as e:
+        return jsonify({'error': f'Erreur récupération statut: {str(e)}'}), 500
 
 @app.route('/api/quiz/evaluate', methods=['POST'])
+@jwt_required()
 def evaluate_quiz():
     """Évalue les réponses du quiz avec Gemini"""
     try:
@@ -564,14 +751,32 @@ def evaluate_quiz():
         percentage = results.percentage
         feedback = generate_feedback(percentage, detailed_results)
 
-        return jsonify({
+        evaluation_data = {
             'success': True,
             'score': results.score,
             'total': results.total_questions,
             'percentage': round(results.percentage, 1),
             'detailed_results': detailed_results,
             'feedback': feedback
-        })
+        }
+        
+        # 🎯 SAUVEGARDE AUTOMATIQUE ÉVALUATION QUIZ
+        user_id = get_jwt_identity()
+        save_result_to_db(
+            user_id=user_id,
+            result_type="quiz_evaluation",
+            data=evaluation_data,
+            meta={
+                "questions_count": len(questions_data),
+                "answers_provided": len([a for a in answers.values() if a >= 0])
+            },
+            refs={
+                "score": results.score,
+                "percentage": results.percentage
+            }
+        )
+
+        return jsonify(evaluation_data)
 
     except Exception as e:
         return jsonify({'error': f'Erreur évaluation: {str(e)}'}), 500  
@@ -610,4 +815,3 @@ if __name__ == '__main__':
         port=3001,
         threaded=True
     )
-    

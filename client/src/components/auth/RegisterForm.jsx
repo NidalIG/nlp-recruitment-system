@@ -14,7 +14,7 @@ export default function RegisterForm({ toggleForm }) {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   
-  const { register, setUser, setToken } = useAuth(); // On récupère setUser/setToken pour login automatique
+  const { register } = useAuth(); // 🔹 pas besoin de setUser/setToken ici
   const navigate = useNavigate();
   
   const handleSubmit = async (e) => {
@@ -41,10 +41,7 @@ export default function RegisterForm({ toggleForm }) {
     });
     
     if (result.success && result.user) {
-    setToken(result.token);
-    setUser(result.user); 
-    navigate(`/app/${result.user.id}`, { replace: true });
-
+      navigate(`/app/${result.user.id}`, { replace: true });
     } else {
       setError(result.error || 'Erreur lors de l\'inscription');
     }
@@ -155,15 +152,14 @@ export default function RegisterForm({ toggleForm }) {
         <p className="text-gray-600">
           Déjà un compte ?{' '}
           <button
-          type="button"
-          onClick={toggleForm}
-          className="text-blue-600 underline"
-        >
-          Connectez-vous
-        </button>
+            type="button"
+            onClick={toggleForm}
+            className="text-blue-600 underline"
+          >
+            Connectez-vous
+          </button>
         </p>
       </div>
     </div>
   );
 };
-

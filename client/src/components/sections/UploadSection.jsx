@@ -21,6 +21,15 @@ export default function UploadSection({
     import.meta.env.VITE_API_BASE ||
     (window.location.hostname === "localhost" ? "http://localhost:3001" : "");
 
+  // Helper pour les headers d'authentification
+  const getAuthHeaders = () => {
+    const token = sessionStorage.getItem("authToken");
+    return {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    };
+  };
+
   async function onFile(e) {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -109,7 +118,7 @@ export default function UploadSection({
     try {
       const res = await fetch(`${API_BASE}/api/parse-cv`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: getAuthHeaders(), // Ajout de l'auth
         body: JSON.stringify({ cvText: textToparse }),
       });
 
@@ -143,12 +152,11 @@ export default function UploadSection({
 
   async function computeMatching() {
     setError("");
-    const matchingLoading = true;
     
     try {
       const res = await fetch(`${API_BASE}/api/match`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: getAuthHeaders(), // Ajout de l'auth - C'EST LA SEULE MODIFICATION IMPORTANTE
         body: JSON.stringify({ cvText, jobText }),
       });
       

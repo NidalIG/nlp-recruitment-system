@@ -1,6 +1,6 @@
 // src/components/layout/AppHeader.jsx
 import React from 'react';
-import { useAuth } from '../../contexts/AuthContext';
+import { useAuth } from "../../contexts/AuthContext";
 import { useNavigate } from 'react-router-dom';
 import { Bot } from "lucide-react";
 
@@ -9,9 +9,10 @@ export default function AppHeader() {
   const { user, setUser, setToken, logout } = useAuth();
   const navigate = useNavigate();
 
+
   function handleLogout() {
-  localStorage.removeItem("token");  // supprimer le token
-  window.location.href = "/";        // redirection home
+    logout();           // supprime token et user via AuthContext
+    navigate("/");      // redirige vers Home proprement
   }
 
 
@@ -32,10 +33,9 @@ export default function AppHeader() {
         {/* Boutons Auth */}
         <div className="flex items-center space-x-4">
           
-          <button
-        onClick={handleLogout}
-        className="bg-red-500 hover:bg-red-700 text-white px-4 py-2 rounded"
-      >
+      
+      <button onClick={handleLogout}
+      className="bg-red-500 hover:bg-red-700 text-white px-4 py-2 rounded">
         Déconnexion
       </button>
         </div>

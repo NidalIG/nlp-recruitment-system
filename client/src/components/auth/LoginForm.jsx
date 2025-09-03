@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 
@@ -7,8 +7,15 @@ export default function LoginForm({ toggleForm }) {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const { login } = useAuth();
+  const { login, user } = useAuth();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!loading && user) {
+      navigate(`/app/${user.id}`, { replace: true });
+    }
+  }, [user, loading, navigate]);
+
 
   const handleSubmit = async (e) => {
     e.preventDefault();

@@ -231,6 +231,7 @@ export const useUserData = () => {
   const clearError = () => {
     setError(null);
   };
+  
 
   // ===== RAFRAÎCHISSEMENT COMPLET =====
   const refreshAllData = async () => {
