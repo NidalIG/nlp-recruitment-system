@@ -1,10 +1,19 @@
-// src/components/layout/Header.jsx
-import React from "react";
+// src/components/layout/AppHeader.jsx
+import React from 'react';
+import { useAuth } from '../../contexts/AuthContext';
+import { useNavigate } from 'react-router-dom';
 import { Bot } from "lucide-react";
-import { useNavigate } from "react-router-dom";
 
-export default function Header() {
+
+export default function AppHeader() {
+  const { user, setUser, setToken, logout } = useAuth();
   const navigate = useNavigate();
+
+  function handleLogout() {
+  localStorage.removeItem("token");  // supprimer le token
+  window.location.href = "/";        // redirection home
+  }
+
 
   return (
     <header className="relative z-50 px-6 py-4 bg-gray-900/80 backdrop-blur-md border-b border-gray-800">
@@ -22,18 +31,13 @@ export default function Header() {
 
         {/* Boutons Auth */}
         <div className="flex items-center space-x-4">
+          
           <button
-            onClick={() => navigate('/login')}
-            className="px-6 py-2 text-gray-300 hover:text-white transition-colors duration-200 font-medium"
-          >
-            Sign In
-          </button>
-          <button
-            onClick={() => navigate('/register')}
-            className="px-6 py-2 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg font-medium hover:from-blue-600 hover:to-purple-700 transition-all duration-200 transform hover:scale-105 shadow-lg hover:shadow-xl"
-          >
-            Sign Up
-          </button>
+        onClick={handleLogout}
+        className="bg-red-500 hover:bg-red-700 text-white px-4 py-2 rounded"
+      >
+        Déconnexion
+      </button>
         </div>
 
       </div>

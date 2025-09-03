@@ -17,3 +17,9 @@ werkzeug==3.0.1
 # Framework web
 flask==3.0.0
 flask-cors==4.0.0
+####nv###
+pymongo 
+flask-bcrypt 
+flask-jwt-extended
+react-router-dom
+#npm install jwt-decode
