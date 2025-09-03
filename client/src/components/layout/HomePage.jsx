@@ -1,7 +1,10 @@
+// MyCareerAILanding.jsx
 import React, { useState, useEffect } from 'react';
-import { Bot, Users, MessageCircle, GraduationCap, Clock, Shield, Zap, ChevronRight, Brain, Target, Award, CheckCircle } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Bot, Users, MessageCircle, GraduationCap, Clock, Shield, Zap, ChevronRight, Brain, Target } from 'lucide-react';
 
-const MyCareerAILanding = ({ onStart }) => {
+const HomePage = () => {
+  const navigate = useNavigate();
   const [isVisible, setIsVisible] = useState(false);
 
   useEffect(() => {
@@ -55,9 +58,6 @@ const MyCareerAILanding = ({ onStart }) => {
 
   return (
     <div className="min-h-screen bg-gray-900 text-white overflow-hidden">
-      {/* Header */}
-      
-
       {/* Hero Section */}
       <section className="relative pt-20 pb-32 overflow-hidden">
         {/* Background Animation */}
@@ -81,10 +81,16 @@ const MyCareerAILanding = ({ onStart }) => {
           </p>
           
           <div className="flex flex-col sm:flex-row items-center justify-center space-y-4 sm:space-y-0 sm:space-x-6">
-            <button onClick={onStart} className="px-8 py-4 bg-gradient-to-r from-blue-500 to-purple-600 rounded-xl font-semibold text-lg hover:from-blue-600 hover:to-purple-700 transition-all duration-200 transform hover:scale-105 shadow-2xl hover:shadow-3xl flex items-center space-x-2">
+            {/* Get Started → Register */}
+            <button 
+              onClick={() => navigate('/register')} 
+              className="px-8 py-4 bg-gradient-to-r from-blue-500 to-purple-600 rounded-xl font-semibold text-lg hover:from-blue-600 hover:to-purple-700 transition-all duration-200 transform hover:scale-105 shadow-2xl hover:shadow-3xl flex items-center space-x-2"
+            >
               <span>Get Started</span>
               <ChevronRight className="w-5 h-5" />
             </button>
+
+            {/* Sign In → Login */}
             <button className="px-8 py-4 border border-gray-600 rounded-xl font-semibold text-lg hover:border-gray-400 hover:bg-gray-800/50 transition-all duration-200 transform hover:scale-105">
               Watch Demo
             </button>
@@ -180,7 +186,10 @@ const MyCareerAILanding = ({ onStart }) => {
           <p className="text-xl text-gray-300 mb-8">
             Join thousands of companies already using My Career AI to find the perfect candidates.
           </p>
-          <button className="px-10 py-4 bg-gradient-to-r from-blue-500 to-purple-600 rounded-xl font-semibold text-lg hover:from-blue-600 hover:to-purple-700 transition-all duration-200 transform hover:scale-105 shadow-2xl hover:shadow-3xl">
+          <button 
+            onClick={() => navigate('/register')}
+            className="px-10 py-4 bg-gradient-to-r from-blue-500 to-purple-600 rounded-xl font-semibold text-lg hover:from-blue-600 hover:to-purple-700 transition-all duration-200 transform hover:scale-105 shadow-2xl hover:shadow-3xl"
+          >
             Start Your Free Trial
           </button>
         </div>
@@ -239,4 +248,4 @@ const MyCareerAILanding = ({ onStart }) => {
   );
 };
 
-export default MyCareerAILanding;
+export default HomePage;

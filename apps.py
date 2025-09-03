@@ -1,14 +1,22 @@
-# app.py - Backend Flask principal corrigé
+# apps.py - Backend Flask principal corrigé avec Auth
 import os
 import json
 import tempfile
+from datetime import datetime, timezone, timedelta
+from bson import ObjectId
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from werkzeug.utils import secure_filename
-from quiz_module import QuizGenerator, QuizEvaluator, Quiz, QuizQuestion
+from pymongo import MongoClient
+from flask_bcrypt import Bcrypt
+from flask_jwt_extended import (
+    JWTManager, create_access_token, jwt_required, get_jwt_identity
+)
 import google.generativeai as genai
+from models.result import create_result
 
 # Imports de vos modules existants
+from quiz_module import QuizGenerator, QuizEvaluator, Quiz, QuizQuestion
 from cv_parsing.extractors import extract_text
 from cv_parsing.gemini_parser import parse_cv_with_gemini
 from cv_parsing.job_parsing import parse_job
@@ -17,17 +25,26 @@ from cv_job_matching import CVJobEmbeddingSimilarity
 app = Flask(__name__)
 CORS(app)
 
-# Configuration
+# -------------------- CONFIG --------------------
 UPLOAD_FOLDER = 'uploads'
 ALLOWED_EXTENSIONS = {'pdf', 'txt', 'docx'}
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
-
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-# Configuration Gemini pour le quiz
+app.config['JWT_SECRET_KEY'] = os.getenv('JWT_SECRET_KEY', 'super-secret-key')
+
+# MongoDB
+mongo_uri = os.getenv('MONGO_URI', 'mongodb://localhost:27017/')
+client = MongoClient(mongo_uri)
+db = client['jobmatch']
+users_collection = db['users']
+
+bcrypt = Bcrypt(app)
+jwt = JWTManager(app)
+
+# -------------------- GEMINI --------------------
 genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
 model = genai.GenerativeModel('gemini-1.5-flash')
-
 
 # Instance globale du calculateur de similarité
 try:
@@ -36,16 +53,133 @@ try:
 except Exception as e:
     print(f"❌ Erreur chargement modèle: {e}")
     similarity_calculator = None
-    
+
 try:
     quiz_generator = QuizGenerator(model)
     print("✅ Générateur de quiz initialisé avec succès")
 except Exception as e:
     print(f"❌ Erreur initialisation générateur de quiz: {e}")
-    quiz_generator = None    
+    quiz_generator = None
 
+# -------------------- HELPERS --------------------
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+# -------------------- AUTH --------------------
+@app.route('/api/auth/register', methods=['POST'])
+def register():
+    data = request.get_json()
+    if not data:
+        return jsonify({'success': False, 'error': 'Données manquantes'}), 400
+
+    email = data.get('email')
+    password = data.get('password')
+    firstName = data.get('firstName')
+    lastName = data.get('lastName')
+
+    if not email or not password:
+        return jsonify({'success': False, 'error': 'Email et mot de passe requis'}), 400
+
+    if users_collection.find_one({'email': email}):
+        return jsonify({'success': False, 'error': 'Email déjà utilisé'}), 409
+
+    pw_hash = bcrypt.generate_password_hash(password).decode('utf-8')
+    user = {
+        'email': email,
+        'password': pw_hash,
+        'firstName': firstName,
+        'lastName': lastName,
+        'createdAt': datetime.now(timezone.utc).isoformat()
+    }
+    users_collection.insert_one(user)
+    return jsonify({'success': True, 'message': 'Utilisateur créé avec succès'}), 201
+
+
+@app.route('/api/auth/login', methods=['POST'])
+def login():
+    data = request.get_json()
+    if not data:
+        return jsonify({'success': False, 'error': 'Données manquantes'}), 400
+
+    email = data.get('email')
+    password = data.get('password')
+
+    user = users_collection.find_one({'email': email})
+    if not user or not bcrypt.check_password_hash(user['password'], password):
+        return jsonify({'success': False, 'error': 'Identifiants invalides'}), 401
+    
+    access_token = create_access_token(
+    identity=str(user['_id']),
+    expires_delta=timedelta(hours=1)  # <-- juste timedelta, pas datetime.timedelta
+    )
+    
+    return jsonify({
+        'success': True,
+        'accessToken': access_token,
+        'user': {
+            'email': user['email'],
+            'firstName': user.get('firstName'),
+            'lastName': user.get('lastName')
+        }
+    })
+
+@app.route('/api/auth/me', methods=['GET'])
+@jwt_required()
+def get_me():
+    user_id = get_jwt_identity()
+    try:
+        obj_id = ObjectId(user_id)
+    except Exception:
+        return jsonify({'success': False, 'error': 'ID utilisateur invalide'}), 400
+    
+    user = users_collection.find_one({'_id': obj_id}, {'password': 0})
+    if not user:
+        return jsonify({'success': False, 'error': 'Utilisateur introuvable'}), 404
+    
+    user['_id'] = str(user['_id'])
+    return jsonify({'success': True, 'user': user})
+
+@app.route('/api/results', methods=['POST'])
+@jwt_required()
+def save_result():
+    """Sauvegarder un résultat (CV parsing, job parsing, quiz, matching)"""
+    data = request.get_json()
+    if not data or "type" not in data or "data" not in data:
+        return jsonify({"error": "type & data requis"}), 400
+
+    user_id = get_jwt_identity()
+    result = create_result(user_id, data["type"], data["data"], data.get("meta"), data.get("refs"))
+    db.results.insert_one(result)
+
+    result["_id"] = str(result["_id"])
+    result["user"] = str(result["user"])
+    return jsonify(result), 201
+
+
+@app.route('/api/results', methods=['GET'])
+@jwt_required()
+def get_results():
+    """Récupérer la liste des résultats de l'utilisateur (avec pagination)"""
+    user_id = get_jwt_identity()
+    type_filter = request.args.get("type")
+    page = int(request.args.get("page", 1))
+    limit = int(request.args.get("limit", 20))
+
+    query = {"user": ObjectId(user_id)}
+    if type_filter:
+        query["type"] = type_filter
+
+    cursor = db.results.find(query).sort("createdAt", -1).skip((page-1)*limit).limit(limit)
+    results = []
+    for r in cursor:
+        r["_id"] = str(r["_id"])
+        r["user"] = str(r["user"])
+        results.append(r)
+
+    return jsonify(results), 200
+
+# -------------------- TES ROUTES EXISTANTES --------------------
+
 
 @app.route('/', methods=['GET'])
 def home():
@@ -365,6 +499,9 @@ def generate_quiz():
         print(f"❌ Erreur génération quiz: {str(e)}")
         return jsonify({'error': f'Erreur: {str(e)}'}), 500
 
+def generate_feedback(percentage, detailed_results):
+    raise NotImplementedError
+
 @app.route('/api/quiz/evaluate', methods=['POST'])
 def evaluate_quiz():
     """Évalue les réponses du quiz avec Gemini"""
@@ -437,7 +574,22 @@ def evaluate_quiz():
         })
 
     except Exception as e:
-        return jsonify({'error': f'Erreur évaluation: {str(e)}'}), 500   
+        return jsonify({'error': f'Erreur évaluation: {str(e)}'}), 500  
+
+@app.route('/api/users/<id>', methods=['GET'])
+@jwt_required()
+def get_user(id):
+    current_user_id = get_jwt_identity()
+    if current_user_id != id:
+        return jsonify({"error": "Accès non autorisé"}), 403
+
+    user = users_collection.find_one({"_id": ObjectId(id)}, {"password": 0})
+    if not user:
+        return jsonify({"error": "Utilisateur introuvable"}), 404
+
+    user["_id"] = str(user["_id"])
+    return jsonify(user)
+     
 
 @app.errorhandler(404)
 def not_found(error):
