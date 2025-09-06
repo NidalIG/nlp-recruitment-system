@@ -15,6 +15,8 @@ from flask_jwt_extended import (
 import google.generativeai as genai
 from models.result import create_result
 
+from typing import List, Dict, Any
+
 # Imports de vos modules existants
 from quiz_module import QuizGenerator, QuizEvaluator, Quiz, QuizQuestion
 from cv_parsing.extractors import extract_text
@@ -62,6 +64,103 @@ except Exception as e:
     quiz_generator = None
 
 # -------------------- HELPERS --------------------
+def _first_non_empty(*vals):
+    for v in vals:
+        if isinstance(v, str) and v.strip():
+            return v.strip()
+    return None
+
+def _top(items: List[str], k=8):
+    return [s for s in items if isinstance(s, str) and s.strip()][:k]
+
+def summarize_cv_for_card(cv: Dict[str, Any]) -> Dict[str, Any]:
+    # cv est déjà un dict structuré (retour de parse_cv_with_gemini)
+    name = cv.get("name") or cv.get("full_name") or "Candidat"
+    skills = cv.get("skills", [])
+    exp = cv.get("experience", []) or []
+    edu = cv.get("education", []) or []
+    langs = cv.get("languages", []) or []
+
+    # Titre court = dernier poste si dispo
+    last_role = None
+    last_company = None
+    if exp and isinstance(exp, list):
+        last = exp[0]  # on suppose l’expérience la plus récente en premier
+        last_role = _first_non_empty(last.get("job_title"), last.get("title"), last.get("role"))
+        last_company = _first_non_empty(last.get("company"), last.get("company_name"), last.get("employer"))
+
+    highest_degree = None
+    if edu and isinstance(edu, list):
+        e0 = edu[0]
+        highest_degree = _first_non_empty(e0.get("degree"), e0.get("diploma"), e0.get("title"))
+
+    bullets = []
+    if last_role or last_company:
+        bullets.append(f"Dernière expérience : {last_role or 'Poste'} @ {last_company or 'Entreprise'}")
+    if highest_degree:
+        bullets.append(f"Formation principale : {highest_degree}")
+    if langs:
+        bullets.append("Langues : " + ", ".join(_top([str(l) for l in langs], 4)))
+    if skills:
+        bullets.append("Compétences clés : " + ", ".join(_top([str(s) for s in skills], 6)))
+
+    return {
+        "type": "cv",
+        "title": name,
+        "subtitle": last_role or "Profil du candidat",
+        "chips": _top([str(s) for s in skills], 8),
+        "bullets": bullets,
+        "updatedAt": datetime.utcnow().isoformat() + "Z"
+    }
+
+def summarize_job_for_card(job: Dict[str, Any]) -> Dict[str, Any]:
+    title = job.get("title") or "Offre"
+    company = _first_non_empty(job.get("company"), job.get("employer"), job.get("organization"))
+    location = _first_non_empty(job.get("location"), job.get("city"))
+    required_skills = job.get("required_skills", []) or []
+    responsibilities = job.get("responsibilities", []) or job.get("missions", []) or []
+    requirements = job.get("requirements", []) or []
+
+    bullets = []
+    if company:
+        bullets.append(f"Entreprise : {company}")
+    if location:
+        bullets.append(f"Localisation : {location}")
+    if responsibilities:
+        bullets.append("Responsabilités : " + ", ".join(_top([str(r) for r in responsibilities], 3)))
+    if requirements:
+        bullets.append("Pré-requis : " + ", ".join(_top([str(r) for r in requirements], 3)))
+    if required_skills:
+        bullets.append("Compétences demandées : " + ", ".join(_top([str(s) for s in required_skills], 6)))
+
+    return {
+        "type": "job",
+        "title": title,
+        "subtitle": company or "Job description",
+        "chips": _top([str(s) for s in required_skills], 8),
+        "bullets": bullets,
+        "updatedAt": datetime.utcnow().isoformat() + "Z"
+    }
+
+def build_profile_card(user_doc: Dict[str, Any], stats: Dict[str, Any]) -> Dict[str, Any]:
+    full_name = " ".join(filter(None, [user_doc.get("firstName"), user_doc.get("lastName")])).strip() or "Utilisateur"
+    email = user_doc.get("email", "")
+    created = user_doc.get("createdAt") or ""
+    bullets = [
+        f"Email : {email}",
+        f"Compte créé le : {created[:10]}" if isinstance(created, str) else "Compte créé : -",
+        f"Historique : {stats.get('cv_count',0)} CV, {stats.get('job_count',0)} offres, {stats.get('quiz_count',0)} quiz"
+    ]
+    return {
+        "type": "profile",
+        "title": full_name,
+        "subtitle": "Profil utilisateur",
+        "chips": ["Inscrit", "Authentifié"],
+        "bullets": bullets,
+        "updatedAt": datetime.utcnow().isoformat() + "Z"
+    }
+
+
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
@@ -73,6 +172,16 @@ def save_result_to_db(user_id, result_type, data, meta=None, refs=None):
         print(f"✅ Résultat {result_type} sauvegardé pour user {user_id}")
     except Exception as e:
         print(f"❌ Erreur sauvegarde résultat: {e}")
+
+def generate_feedback(percentage: float, detailed_results: list) -> dict:
+    """Petit helper de feedback pour l'évaluation du quiz (évite un NameError)."""
+    if percentage >= 80:
+        return {"level": "Excellent", "message": "Félicitations ! Vous maîtrisez très bien le sujet.", "color": "green"}
+    if percentage >= 60:
+        return {"level": "Bien", "message": "Bon travail ! Quelques points à revoir mais vous êtes sur la bonne voie.", "color": "blue"}
+    if percentage >= 40:
+        return {"level": "Moyen", "message": "Il y a des lacunes à combler. Continuez à étudier !", "color": "orange"}
+    return {"level": "À améliorer", "message": "Il faut revoir les bases. Ne vous découragez pas !", "color": "red"}
 
 # -------------------- AUTH --------------------
 @app.route('/api/auth/register', methods=['POST'])
@@ -134,8 +243,8 @@ def login():
         return jsonify({'success': False, 'error': 'Identifiants invalides'}), 401
     
     access_token = create_access_token(
-    identity=str(user['_id']),
-    expires_delta=timedelta(hours=1)  # <-- juste timedelta, pas datetime.timedelta
+        identity=str(user['_id']),
+        expires_delta=timedelta(hours=1)
     )
     
     return jsonify({
@@ -203,9 +312,145 @@ def get_results():
 
     return jsonify(results), 200
 
+@app.route('/api/assistant/cards', methods=['GET'])
+@jwt_required()
+def get_assistant_cards():
+    """
+    Retourne 3 cartes:
+      - profile: infos de l'utilisateur (users_collection)
+      - cv: résumé du dernier CV parsé (db.results type='cv')
+      - job: résumé de la dernière job_description parsée (db.results type='job')
+    + Fallback: si pas de 'job' (ou 'cv'), chercher dans le dernier 'matching'
+    """
+    try:
+        user_id = get_jwt_identity()
+        obj_id = ObjectId(user_id)
+
+        # Profil
+        user = users_collection.find_one({'_id': obj_id}, {'password': 0}) or {}
+
+        # Dernier CV parsé
+        latest_cv_result = db.results.find_one(
+            {"user": obj_id, "type": "cv"},
+            sort=[("createdAt", -1)]
+        )
+        cv_card = None
+        if latest_cv_result and latest_cv_result.get("data"):
+            cv_data = latest_cv_result["data"]
+            if isinstance(cv_data, dict) and "parsed_cv" in cv_data:
+                cv_data = cv_data["parsed_cv"]
+            cv_card = summarize_cv_for_card(cv_data)
+
+        # Dernière offre parsée
+        latest_job_result = db.results.find_one(
+            {"user": obj_id, "type": "job"},
+            sort=[("createdAt", -1)]
+        )
+        job_card = None
+        if latest_job_result and latest_job_result.get("data"):
+            job_card = summarize_job_for_card(latest_job_result["data"])
+
+        # 🔁 Fallback depuis le dernier MATCHING si besoin
+        if not job_card or not cv_card:
+            latest_match = db.results.find_one(
+                {"user": obj_id, "type": "matching"},
+                sort=[("createdAt", -1)]
+            )
+            if latest_match:
+                mdata = latest_match.get("data", {})
+                if not job_card and isinstance(mdata.get("parsed_job"), dict):
+                    job_card = summarize_job_for_card(mdata["parsed_job"])
+                if not cv_card and isinstance(mdata.get("parsed_cv"), dict):
+                    cv_card = summarize_cv_for_card(mdata["parsed_cv"])
+
+        # petites stats
+        cv_count = db.results.count_documents({"user": obj_id, "type": "cv"})
+        job_count = db.results.count_documents({"user": obj_id, "type": "job"})
+        quiz_count = db.results.count_documents({"user": obj_id, "type": {"$in": ["quiz", "quiz_evaluation"]}})
+
+        profile_card = build_profile_card(user, {
+            "cv_count": cv_count, "job_count": job_count, "quiz_count": quiz_count
+        })
+
+        return jsonify({
+            "success": True,
+            "cards": {
+                "profile": profile_card,
+                "cv": cv_card,
+                "job": job_card
+            }
+        }), 200
+
+    except Exception as e:
+        return jsonify({"success": False, "error": f"Erreur assistant: {str(e)}"}), 500
+
+# -------------------- CHAT GEMINI --------------------
+@app.route('/api/chat', methods=['POST'])
+@jwt_required(optional=True)
+def chat_with_gemini():
+    """
+    Chat général branché sur Gemini, avec contexte CV/JD si l'utilisateur est authentifié.
+    Le front envoie: { "messages": [ {role, content}, ... ] }
+    """
+    try:
+        payload = request.get_json() or {}
+        incoming = payload.get("messages", [])
+
+        # 1) System prompt (sinon défaut)
+        sys = next((m.get("content") for m in incoming if m.get("role") == "system"), None)
+        system_instruction = sys or (
+            "Tu es un assistant utile spécialisé en recrutement. "
+            "Réponds en FRANÇAIS, de façon claire et concise. "
+            "Si la question concerne le candidat, appuie-toi sur le CV et la Job Description si disponibles."
+        )
+
+        # 2) Contexte utilisateur (CV/JD)
+        user_id = get_jwt_identity()
+        ctx_lines = []
+        if user_id:
+            obj_id = ObjectId(user_id)
+            latest_cv = db.results.find_one({"user": obj_id, "type": "cv"}, sort=[("createdAt", -1)])
+            latest_job = db.results.find_one({"user": obj_id, "type": "job"}, sort=[("createdAt", -1)])
+
+            if latest_cv and latest_cv.get("data"):
+                cv_data = latest_cv["data"].get("parsed_cv", latest_cv["data"])
+                cv_card = summarize_cv_for_card(cv_data)
+                ctx_lines.append(f"[CV] {cv_card['title']} — {cv_card['subtitle']}. " +
+                                 " | ".join(cv_card.get("bullets", [])))
+            if latest_job and latest_job.get("data"):
+                job_card = summarize_job_for_card(latest_job["data"])
+                ctx_lines.append(f"[JOB] {job_card['title']} — {job_card['subtitle']}. " +
+                                 " | ".join(job_card.get("bullets", [])))
+
+        context_blob = "\n".join(ctx_lines) if ctx_lines else ""
+
+        # 3) Construire l'historique pour Gemini (ignorer 'system'; on l'injecte à part)
+        history = []
+        for m in incoming:
+            role = m.get("role")
+            content = m.get("content", "")
+            if role == "user":
+                history.append({"role": "user", "parts": [content]})
+            elif role == "assistant":
+                history.append({"role": "model", "parts": [content]})
+
+        # 4) Instancier le modèle avec l’instruction système + contexte
+        chat_model = genai.GenerativeModel(
+            "gemini-1.5-flash",
+            system_instruction=system_instruction + ("\n\nContexte:\n" + context_blob if context_blob else "")
+        )
+
+        resp = chat_model.generate_content(history if history else [{"role": "user", "parts": ["Bonjour"]}])
+        text = (resp.text or "").strip() or "(Réponse vide)"
+
+        return jsonify({
+            "message": {"role": "assistant", "content": text},
+            "success": True
+        })
+    except Exception as e:
+        return jsonify({"error": f"Erreur chat: {str(e)}"}), 500
+
 # -------------------- TES ROUTES EXISTANTES --------------------
-
-
 @app.route('/', methods=['GET'])
 def home():
     """Page d'accueil pour tester le serveur"""
@@ -380,11 +625,27 @@ def calculate_matching():
         except Exception as e:
             return jsonify({'error': f'Erreur parsing CV: {str(e)}'}), 500
         
+        # --- parse de la JD ---
         try:
             parsed_job = parse_job(job_text)
         except Exception as e:
             return jsonify({'error': f'Erreur parsing job: {str(e)}'}), 500
-        
+
+        # --- autosave de la JD pour alimenter l’assistant (/api/assistant/cards) ---
+        try:
+            user_id = get_jwt_identity()
+            save_result_to_db(
+                user_id=user_id,
+                result_type="job",
+                data=parsed_job,
+                meta={
+                    "source": "match_endpoint_autosave",
+                    "original_text_length": len(job_text)
+                }
+            )
+        except Exception as e:
+            app.logger.warning(f"Autosave job failed: {e}")
+                
         # Calcul de similarité avec embedding
         try:
             similarity_result = similarity_calculator.calculate_comprehensive_embedding_similarity(
@@ -434,7 +695,6 @@ def calculate_matching():
             }
             
             # 🎯 SAUVEGARDE AUTOMATIQUE MATCHING
-            user_id = get_jwt_identity()
             save_result_to_db(
                 user_id=user_id,
                 result_type="matching",
@@ -493,13 +753,11 @@ def generate_detailed_report():
     
     except Exception as e:
         return jsonify({'error': f'Erreur génération rapport: {str(e)}'}), 500
-    
-
 
 @app.route('/api/quiz', methods=['POST'])
 @jwt_required()
 def generate_quiz():
-    """Génère un quiz basé sur le profil utilisateur réel (CV parsé)"""
+    """Génère un quiz basé sur le profil utilisateur réel (CV parsé) et les compétences matchées (focus_skills)."""
     try:
         data = request.get_json()
         if not data:
@@ -521,15 +779,35 @@ def generate_quiz():
         }
         mapped_level = level_map.get(level, 'intermédiaire')
         
-        # 🔥 RÉCUPÉRATION DU PROFIL UTILISATEUR RÉEL
+        # Profil utilisateur depuis le CV
         user_profile = get_user_profile_from_cv(user_id)
-        
-        # Génération du quiz avec le profil réel
-        quiz = quiz_generator.generate_quiz(
-            user_profile=user_profile,
-            level=mapped_level,
-            num_questions=count
+
+        # 🔎 Compétences ciblées depuis le DERNIER MATCHING
+        focus_skills = []
+        latest_match = db.results.find_one(
+            {"user": ObjectId(user_id), "type": "matching"},
+            sort=[("createdAt", -1)]
         )
+        if latest_match:
+            sa = latest_match.get("data", {}).get("skill_analysis", {})
+            top = sa.get("top_skill_matches", []) or []
+            focus_skills = [t.get("job_skill") for t in top if t.get("job_skill")][:5]
+
+        # Génération du quiz (avec tolérance si votre QuizGenerator n'a pas encore 'focus_skills')
+        try:
+            quiz = quiz_generator.generate_quiz(
+                user_profile=user_profile,
+                level=mapped_level,
+                num_questions=count,
+                focus_skills=focus_skills
+            )
+        except TypeError:
+            # Ancienne signature (fallback)
+            quiz = quiz_generator.generate_quiz(
+                user_profile=user_profile,
+                level=mapped_level,
+                num_questions=count
+            )
         
         if not quiz:
             return jsonify({'error': 'Génération échouée'}), 500
@@ -563,7 +841,8 @@ def generate_quiz():
                 'estimated_duration': quiz.estimated_duration,
                 'level': level,
                 'profile_used': user_profile.get('name', 'Utilisateur'),
-                'skills_detected': len(user_profile.get('skills', []))
+                'skills_detected': len(user_profile.get('skills', [])),
+                'focus_skills': focus_skills
             }
         }
         
@@ -809,9 +1088,9 @@ if __name__ == '__main__':
     print(f"📁 Dossier uploads: {UPLOAD_FOLDER}")
     print(f"🤖 Modèle de similarité: {similarity_calculator.model_type if similarity_calculator else 'Indisponible'}")
     
-    app.run(
-        debug=True,
-        host='0.0.0.0',
-        port=3001,
-        threaded=True
-    )
+app.run(
+    debug=True,
+    host='0.0.0.0',
+    port=3001,
+    threaded=True
+)

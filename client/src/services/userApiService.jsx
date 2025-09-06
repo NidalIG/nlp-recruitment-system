@@ -6,6 +6,13 @@ class UserApiService {
     this.baseURL = API_URL;
   }
 
+  async getAssistantCards() {
+    const res = await fetch(`${this.baseURL}/api/assistant/cards`, {
+      headers: this.getAuthHeaders(),
+    });
+    return this.handleResponse(res);
+  }
+
   // === Auth ===
   async register(data) {
     const res = await fetch(`${this.baseURL}/api/auth/register`, {
