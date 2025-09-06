@@ -1,5 +1,7 @@
 import React, { useRef, useState } from "react";
 
+import userApiService from "../../services/userApiService";
+
 export default function UploadSection({ 
   cvText, 
   setCvText, 
@@ -9,7 +11,8 @@ export default function UploadSection({
   jobText,
   setJobText,
   lastResult,
-  setLastResult
+  setLastResult,
+  onDataChanged
 }) {
   const [loading, setLoading] = useState(false);
   const [parsing, setParsing] = useState(false);
@@ -29,6 +32,46 @@ export default function UploadSection({
       Authorization: `Bearer ${token}`,
     };
   };
+
+
+  async function handleFile(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setLoading(true); setError(""); setWarning("");
+    try {
+      // 1) upload + extraction
+      const uploaded = await userApiService.uploadAndParseCV(file);
+      setFilename(uploaded.filename || file.name);
+      if (uploaded.warning) setWarning(uploaded.warning);
+      const parsed = uploaded?.parsed_cv || uploaded?.parsedCv || uploaded; // souple selon backend
+      if (parsed) {
+        setParsedCv(parsed);
+        // 2) rafraîchir l’assistant (ira chercher la carte CV dans Mongo)
+        onDataChanged?.();
+      }
+    } catch (err) {
+      setError(err.message || "Erreur upload/parsing");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleParseJob() {
+    if (!jobText?.trim()) return;
+    setLoading(true); setError("");
+    try {
+      const res = await userApiService.parseJob(jobText.trim());
+      // Optionnel: conserve res.parsed_job dans un état si tu veux
+      // 🔔 Informe l’Assistant que la JD a changé
+      onDataChanged?.();
+    } catch (err) {
+      setError(err.message || "Erreur parsing job");
+    } finally {
+      setLoading(false);
+    }
+  }
+
 
   async function onFile(e) {
     const file = e.target.files?.[0];
@@ -270,6 +313,15 @@ export default function UploadSection({
               className="w-full p-4 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none"
             />
             
+            <button
+              onClick={handleParseJob}
+              disabled={!jobText?.trim() || loading}
+              className="w-full btn btn-outline"
+            >
+              Analyser l’offre
+            </button>
+
+
             <div className="text-sm text-slate-500 text-center">
               Ou glissez-déposez un fichier de description de poste
             </div>

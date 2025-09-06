@@ -22,4 +22,4 @@ pymongo
 flask-bcrypt 
 flask-jwt-extended
 react-router-dom
-#npm install jwt-decode
+#npm install jwt-decodepython -m pip install --upgrade pip
