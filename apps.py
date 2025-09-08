@@ -210,7 +210,7 @@ def suggest_certs_for_skills(skills):
                 out.extend(certs); added = True; break
         if not added:
             out.append({"certification": f"Certification {s}", "priority": "Moyenne", "relevance": str(s)})
-
+    # unicité
     seen = set(); uniq = []
     for c in out:
         name = c.get("certification") or c.get("title") or c.get("name")
@@ -236,41 +236,97 @@ def suggest_projects_for_skills(skills):
             ideas.append("Serverless sur AWS (API Gateway + Lambda + DynamoDB)")
         else:
             ideas.append(f"Mini-projet appliquant {t}")
+    # unicité
     seen = set(); uniq = []
     for p in ideas:
         if p not in seen:
             uniq.append(p); seen.add(p)
     return uniq[:8]
 
-def build_recommendations_from_sources(parsed_cv, parsed_job, missing_keywords, weak_areas, quiz_eval):
-    focus = set()
-    for k in _norm_list(missing_keywords):
-        focus.add(str(k))
+def _ordered_unique(seq):
+    seen = set()
+    out = []
+    for x in seq:
+        k = str(x).strip().lower()
+        if k and k not in seen:
+            out.append(str(x).strip())
+            seen.add(k)
+    return out
 
-    # zones faibles issues du quiz
+def build_recommendations_from_match_and_quiz(match: Dict[str, Any], quiz_eval: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Construit des recommandations à partir:
+      - match: résultat du /api/match (missing_keywords, weak_areas, skill_analysis, parsed_job, score...)
+      - quiz_eval: résultat du /api/quiz/evaluate (detailed_results, percentage...)
+    Priorité: missing_keywords (JD), weak_areas (matching), erreurs quiz (skill_area),
+              puis skills faibles détectés (skill_analysis.low_job_skill_matches).
+    """
+    missing = _norm_list((match or {}).get("missing_keywords"))
+    weak_areas = _norm_list((match or {}).get("weak_areas"))
+    skill_analysis = (match or {}).get("skill_analysis", {}) or {}
+    parsed_job = (match or {}).get("parsed_job", {}) or {}
+
+    low_job_skill_matches = _norm_list(skill_analysis.get("low_job_skill_matches"))  # liste de dicts?
+    low_job_skills = []
+    for item in low_job_skill_matches:
+        if isinstance(item, dict):
+            name = _first_non_empty(item.get("job_skill"), item.get("skill"), item.get("name"))
+            if name: low_job_skills.append(name)
+        elif isinstance(item, str):
+            low_job_skills.append(item)
+
+    # Erreurs quiz -> skill areas ratées
+    quiz_bad_areas = []
     if quiz_eval:
         for dr in _norm_list(quiz_eval.get("detailed_results")):
-            if not dr.get("is_correct") and dr.get("skill_area"):
-                focus.add(str(dr["skill_area"]))
+            if not dr.get("is_correct"):
+                area = dr.get("skill_area")
+                if area: quiz_bad_areas.append(area)
 
-    # sinon, prendre quelques compétences de la JD
-    if not focus and parsed_job:
-        for s in _norm_list(parsed_job.get("required_skills"))[:5]:
-            focus.add(str(s))
+    # Fallback côté JD si peu d'éléments
+    jd_required = _norm_list(parsed_job.get("required_skills"))[:5]
 
-    focus_list = list(focus)[:10]
-    recos = {
-        "certifications": suggest_certs_for_skills(focus_list),
-        "projects": suggest_projects_for_skills(focus_list),
-        "learning_plan": [
-            "S1-2 : Consolider les bases (cours + fiches mémo).",
-            "S3-4 : 2 mini-projets guidés et revue de code.",
-            "S5 : Quiz ciblés sur les points faibles.",
-            "S6 : Préparation certification (banque de questions).",
-        ],
-        "focus_skills": focus_list
+    # Construction d'une liste pondérée puis dédoublonnée en conservant l'ordre
+    priority_stack = []
+    priority_stack += [f"{s}" for s in missing] * 3           # très prioritaire
+    priority_stack += [f"{s}" for s in weak_areas] * 2        # prioritaire
+    priority_stack += [f"{s}" for s in quiz_bad_areas] * 2    # prioritaire (quiz)
+    priority_stack += [f"{s}" for s in low_job_skills]        # utile
+    if not priority_stack:
+        priority_stack += [f"{s}" for s in jd_required]
+
+    focus_skills = _ordered_unique(priority_stack)[:10]
+
+    # Génération des recos
+    certifications = suggest_certs_for_skills(focus_skills)
+    projects = suggest_projects_for_skills(focus_skills)
+    learning_plan = [
+        "S1 : Reprendre les bases des 2–3 compétences les plus faibles.",
+        "S2 : Mise en pratique guidée (exos ciblés) + flashcards.",
+        "S3 : Mini-projet tiré de la JD, code revu.",
+        "S4 : Quiz de consolidation sur ces compétences.",
+        "S5 : Préparation certification (banque de questions)."
+    ]
+
+    # Contexte & métriques
+    rationale = {
+        "matching_score": (match or {}).get("score"),
+        "quiz_percentage": (quiz_eval or {}).get("percentage") if quiz_eval else None,
+        "used_signals": {
+            "missing_keywords": missing,
+            "weak_areas": weak_areas,
+            "quiz_incorrect_areas": quiz_bad_areas,
+            "low_job_skills": low_job_skills
+        }
     }
-    return recos
+
+    return {
+        "focus_skills": focus_skills,
+        "certifications": certifications,
+        "projects": projects,
+        "learning_plan": learning_plan,
+        "rationale": rationale
+    }
 
 # -------------------- AUTH --------------------
 @app.route('/api/auth/register', methods=['POST'])
@@ -298,7 +354,6 @@ def login():
     data = request.get_json() or {}
     email = data.get('email'); password = data.get('password')
     user = users_collection.find_one({'email': email})
-    # messages distincts (mais même texte si souhaité)
     if not user:
         return jsonify({'success': False, 'error': 'Identifiant (email) incorrect'}), 401
     if not bcrypt.check_password_hash(user['password'], password):
@@ -463,13 +518,11 @@ def calculate_matching():
             'success': True
         }
 
-        # ---- Recommandations (inclure dans la réponse + sauvegarder) ----
+        # ---- Recommandations (basées sur matching + quiz) ----
         user_id = get_jwt_identity()
         latest_quiz_eval = db.results.find_one({"user": ObjectId(user_id), "type": "quiz_evaluation"}, sort=[("createdAt", -1)])
-        recommendations = build_recommendations_from_sources(
-            parsed_cv, parsed_job, missing_keywords, sim.get('weak_areas', []),
-            (latest_quiz_eval or {}).get("data")
-        )
+        quiz_payload = (latest_quiz_eval or {}).get("data")
+        recommendations = build_recommendations_from_match_and_quiz(matching_data, quiz_payload)
         matching_data["recommendations"] = recommendations
 
         # save
@@ -539,18 +592,16 @@ def assistant_recommendations():
         latest_match = db.results.find_one({"user": oid, "type": "matching"}, sort=[("createdAt", -1)])
         latest_quiz_eval = db.results.find_one({"user": oid, "type": "quiz_evaluation"}, sort=[("createdAt", -1)])
 
-        recos = None; parsed_cv = None; parsed_job = None; missing = []; weak = []
-        if latest_match:
-            md = latest_match.get("data", {})
-            recos = md.get("recommendations")
-            parsed_cv = md.get("parsed_cv")
-            parsed_job = md.get("parsed_job")
-            missing = md.get("missing_keywords", [])
-            weak = md.get("weak_areas", [])
+        if not latest_match:
+            return jsonify({"success": False, "error": "Aucun résultat de matching trouvé. Lancez d'abord une analyse de compatibilité."}), 400
 
+        mdata = latest_match.get("data", {}) or {}
+        recos = mdata.get("recommendations")
+
+        # Si pas de recos sauvegardées ou si l’on veut rafraîchir avec le quiz le plus récent, on recalcule
+        quiz_payload = (latest_quiz_eval or {}).get("data")
         if not recos:
-            recos = build_recommendations_from_sources(parsed_cv or {}, parsed_job or {}, missing or [], weak or [],
-                                                      (latest_quiz_eval or {}).get("data"))
+            recos = build_recommendations_from_match_and_quiz(mdata, quiz_payload)
 
         messages = []
         if recos.get("certifications"):
@@ -559,6 +610,8 @@ def assistant_recommendations():
             messages.append({"type": "projects", "items": recos["projects"]})
         if recos.get("learning_plan"):
             messages.append({"type": "insight", "text": "📚 Plan d’apprentissage disponible dans les recommandations."})
+        if recos.get("focus_skills"):
+            messages.append({"type": "focus", "items": recos["focus_skills"]})
 
         return jsonify({"success": True, "messages": messages, "recommendations": recos})
     except Exception as e:
@@ -609,44 +662,151 @@ def chat_with_gemini():
         return jsonify({"error": f"Erreur chat: {e}"}), 500
 
 # -------------------- QUIZ --------------------
+# Helpers additionnels pour extraire proprement les compétences du CV
+def _normalize_skill_list(skills_raw) -> List[str]:
+    """
+    Accepte une liste de strings ou d'objets et renvoie une liste de noms de compétences (strings).
+    Exemples d'objets supportés: {"name": "Python"}, {"skill": "Docker"}, {"title": "Kubernetes"}
+    """
+    if not isinstance(skills_raw, list):
+        return []
+    out = []
+    for s in skills_raw:
+        if isinstance(s, str):
+            name = s.strip()
+        elif isinstance(s, dict):
+            name = _first_non_empty(s.get("name"), s.get("skill"), s.get("title"), s.get("label"))
+        else:
+            name = None
+        if name:
+            out.append(name)
+    # unicité en conservant l'ordre
+    seen = set()
+    uniq = []
+    for n in out:
+        low = n.lower()
+        if low not in seen:
+            uniq.append(n)
+            seen.add(low)
+    return uniq
+
+def _pick_focus_skills_from_cv(parsed_cv: Dict[str, Any], max_n: int = 8) -> List[str]:
+    """
+    Récupère les compétences du CV (avec normalisation) et en sélectionne jusqu'à max_n.
+    """
+    skills_raw = (parsed_cv or {}).get("skills", []) or []
+    skills = _normalize_skill_list(skills_raw)
+    return skills[:max_n]
+
 @app.route('/api/quiz', methods=['POST'])
 @jwt_required()
 def generate_quiz():
+    """
+    Génére un quiz ciblé SUR LES COMPÉTENCES DU CV.
+    - Échec si aucun CV n'est trouvé pour l'utilisateur.
+    - Utilise QuizGenerator avec focus_skills = compétences extraites du CV.
+    """
     data = request.get_json() or {}
-    level = data.get('level', 'moyen'); count = data.get('count', 5); user_id = get_jwt_identity()
-    if not quiz_generator: return jsonify({'error': 'Générateur non disponible'}), 500
+    level = data.get('level', 'moyen')
+    count = data.get('count', 5)
+    user_id = get_jwt_identity()
 
+    if not quiz_generator:
+        return jsonify({'error': 'Générateur non disponible'}), 500
+
+    # 1) Récupère le dernier CV parsé enregistré pour l’utilisateur
+    latest_cv_doc = db.results.find_one({"user": ObjectId(user_id), "type": "cv"}, sort=[("createdAt", -1)])
+    if not latest_cv_doc or not latest_cv_doc.get("data"):
+        return jsonify({
+            'error': "Aucun CV trouvé. Veuillez uploader et parser votre CV avant de générer un quiz ciblé."
+        }), 400
+
+    # Le CV peut être stocké sous data['parsed_cv'] ou directement data
+    cv_data = latest_cv_doc["data"]
+    parsed_cv = cv_data["parsed_cv"] if isinstance(cv_data, dict) and "parsed_cv" in cv_data else cv_data
+
+    # 2) Profil utilisateur basé sur le CV (pour contexte du générateur)
+    profile = {
+        'name': parsed_cv.get('name', 'Candidat'),
+        'skills': parsed_cv.get('skills', []),
+        'education': parsed_cv.get('education', []),
+        'experience': parsed_cv.get('experience', []),
+        'languages': parsed_cv.get('languages', []),
+        'certifications': parsed_cv.get('certifications', []),
+    }
+
+    # 3) Déterminer les compétences ciblées (focus_skills) à partir du CV
+    focus_skills = _pick_focus_skills_from_cv(parsed_cv, max_n=8)
+    if not focus_skills:
+        return jsonify({
+            'error': "Votre CV ne contient pas de compétences exploitables. Veuillez vérifier l’extraction de votre CV."
+        }), 400
+
+    # 4) Niveaux mappés
     level_map = {'facile': 'débutant', 'moyen': 'intermédiaire', 'difficile': 'avancé'}
     mapped_level = level_map.get(level, 'intermédiaire')
 
-    profile = get_user_profile_from_cv(user_id)
-    focus_skills = []
-    latest_match = db.results.find_one({"user": ObjectId(user_id), "type": "matching"}, sort=[("createdAt", -1)])
-    if latest_match:
-        sa = latest_match.get("data", {}).get("skill_analysis", {}) or {}
-        top = sa.get("top_skill_matches", []) or []
-        focus_skills = [t.get("job_skill") for t in top if t.get("job_skill")][:5]
-
+    # 5) Génération du quiz ciblé sur ces compétences
     try:
-        quiz = quiz_generator.generate_quiz(user_profile=profile, level=mapped_level, num_questions=count, focus_skills=focus_skills)
+        quiz = quiz_generator.generate_quiz(
+            user_profile=profile,
+            level=mapped_level,
+            num_questions=count,
+            focus_skills=focus_skills  # ⬅️ ciblage explicite sur les compétences du CV
+        )
     except TypeError:
-        quiz = quiz_generator.generate_quiz(user_profile=profile, level=mapped_level, num_questions=count)
+        # Compat rétro si l’implémentation n’a pas encore le param focus_skills
+        quiz = quiz_generator.generate_quiz(
+            user_profile=profile,
+            level=mapped_level,
+            num_questions=count
+        )
 
-    if not quiz: return jsonify({'error': 'Génération échouée'}), 500
+    if not quiz:
+        return jsonify({'error': 'Génération échouée'}), 500
 
+    # 6) Normalisation des questions (suppression des préfixes a), b) ...)
     questions = []
     for i, q in enumerate(quiz.questions):
         clean_choices = [(opt.split(') ', 1)[1] if ') ' in opt else opt) for opt in q.options]
-        questions.append({'id': i, 'question': q.question, 'choices': clean_choices,
-                          'answerIndex': q.correct_answer, 'explanation': q.explanation, 'skillArea': q.skill_area})
+        questions.append({
+            'id': i,
+            'question': q.question,
+            'choices': clean_choices,
+            'answerIndex': q.correct_answer,
+            'explanation': q.explanation,
+            'skillArea': q.skill_area
+        })
 
-    quiz_data = {'success': True, 'questions': questions,
-                 'quiz_info': {'title': quiz.title, 'description': quiz.description,
-                               'estimated_duration': quiz.estimated_duration,
-                               'level': level, 'profile_used': profile.get('name', 'Utilisateur'),
-                               'skills_detected': len(profile.get('skills', [])), 'focus_skills': focus_skills}}
-    save_result_to_db(user_id, "quiz", quiz_data,
-                      {"level": level, "mapped_level": mapped_level, "questions_count": count, "generated_questions": len(questions), "profile_source": "cv_parsing"})
+    quiz_data = {
+        'success': True,
+        'questions': questions,
+        'quiz_info': {
+            'title': quiz.title,
+            'description': quiz.description,
+            'estimated_duration': quiz.estimated_duration,
+            'level': level,
+            'profile_used': profile.get('name', 'Utilisateur'),
+            'skills_detected': len(profile.get('skills', [])),
+            'focus_skills': focus_skills  # ⬅️ visible côté client si besoin
+        }
+    }
+
+    # 7) Sauvegarde
+    save_result_to_db(
+        user_id,
+        "quiz",
+        quiz_data,
+        meta={
+            "level": level,
+            "mapped_level": mapped_level,
+            "questions_count": count,
+            "generated_questions": len(questions),
+            "profile_source": "cv_parsing",
+            "using_cv_skills": True,
+            "focus_skills_count": len(focus_skills)
+        }
+    )
     return jsonify(quiz_data)
 
 def get_user_profile_from_cv(user_id):
@@ -662,6 +822,7 @@ def get_user_profile_from_cv(user_id):
                     'languages': cv_parsed.get('languages', []),
                     'certifications': cv_parsed.get('certifications', [])}
         else:
+            # Fallback: profil générique (utilisé ailleurs)
             user = users_collection.find_one({'_id': ObjectId(user_id)}) or {}
             return {'name': f"{user.get('firstName','')} {user.get('lastName','')}".strip() or 'Candidat',
                     'skills': ['Développement', 'Programmation', 'Informatique'],
