@@ -1,116 +1,143 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import jwtDecode from "jwt-decode";
+// client/src/contexts/AuthContext.jsx
+import React, { createContext, useContext, useEffect, useState } from "react";
 
-export const AuthContext = createContext();
+const AuthContext = createContext(null);
 
-export const useAuth = () => {
-  const context = useContext(AuthContext);
-  if (!context) throw new Error('useAuth must be used within an AuthProvider');
-  return context;
-};
+export function AuthProvider({ children }) {
+  const API_BASE =
+    import.meta.env.VITE_API_BASE ||
+    (window.location.hostname === "localhost" ? "http://localhost:3001" : "");
 
-export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(null);
-  const [token, setToken] = useState(() => sessionStorage.getItem('authToken'));
+  const [token, setToken] = useState(() => sessionStorage.getItem("authToken") || "");
+  const [user, setUser] = useState(() => {
+    try {
+      const raw = sessionStorage.getItem("authUser");
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  });
   const [loading, setLoading] = useState(true);
 
-  // Vérification du token au chargement
+  // Headers d'auth
+  const authHeaders = (extra = {}) => ({
+    "Content-Type": "application/json",
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...extra,
+  });
+
+  // Au boot: si token connu, récupérer /me
   useEffect(() => {
-    const checkAuth = async () => {
-      if (token) {
-        try {
-          const decoded = jwtDecode(token);
-          const userId = decoded.sub;
-
-          const response = await fetch('/api/auth/me', {
-            headers: { 'Authorization': `Bearer ${token}` }
-          });
-
-          if (response.ok) {
-            const data = await response.json();
-            const currentUser = data.user ? { id: userId, ...data.user } : { id: userId };
-            setUser(currentUser);
-          } else {
-            logout();
-          }
-        } catch (err) {
-          console.error('Auth check failed:', err);
-          logout();
+    let mounted = true;
+    (async () => {
+      if (!token) { setLoading(false); return; }
+      try {
+        const res = await fetch(`${API_BASE}/api/auth/me`, { headers: authHeaders() });
+        const data = await res.json();
+        if (res.ok && data?.success) {
+          const u = data.user;
+          const normalized = {
+            id: u.id || u._id,
+            email: u.email,
+            firstName: u.firstName,
+            lastName: u.lastName,
+            createdAt: u.createdAt
+          };
+          setUser(normalized);
+          sessionStorage.setItem("authUser", JSON.stringify(normalized));
+        } else {
+          // token expiré/invalid → purge
+          sessionStorage.removeItem("authToken");
+          sessionStorage.removeItem("authUser");
+          setToken("");
+          setUser(null);
         }
+      } catch {
+        // réseau down → on ne purge pas, on laissera réessayer plus tard
+      } finally {
+        if (mounted) setLoading(false);
       }
-      setLoading(false);
+    })();
+    return () => { mounted = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // --------- ACTIONS ----------
+ async function login(email, password) {
+  try {
+    const r = await fetch(`${API_BASE}/api/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password })
+    });
+    const data = await r.json();
+
+    if (!r.ok) {
+      // ❗ Ne force plus "Mot de passe incorrect" : affiche le message renvoyé
+      const msg = data?.error || `HTTP ${r.status}`;
+      return { success: false, error: msg };
+    }
+
+    const t = data.accessToken;
+    const u = data.user || {};
+    const normalized = {
+      id: u.id,
+      email: u.email,
+      firstName: u.firstName,
+      lastName: u.lastName
     };
 
-    checkAuth();
-  }, [token]);
-
-  const login = async (email, password) => {
-    try {
-      const response = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password })
-      });
-
-      const data = await response.json();
-
-      if (response.ok) {
-        const decoded = jwtDecode(data.accessToken);
-        setToken(data.accessToken);
-        setUser({ id: decoded.sub, ...data.user });
-        sessionStorage.setItem('authToken', data.accessToken);
-        return { success: true, user: { id: decoded.sub, ...data.user }, token: data.accessToken };
-      } else {
-    return { success: false, error: data.error || 'Erreur de connexion' };
+    sessionStorage.setItem("authToken", t);
+    sessionStorage.setItem("authUser", JSON.stringify(normalized));
+    setToken(t);
+    setUser(normalized);
+    return { success: true, user: normalized };
+  } catch (e) {
+    return { success: false, error: e?.message || "Erreur de connexion" };
+  }
 }
-    } catch (err) {
-      return { success: false, error: 'Erreur de connexion' };
-    }
-  };
 
-  const register = async (userData) => {
+
+  // Rem: par conception, on NE connecte PAS automatiquement après inscription.
+  async function register(payload) {
     try {
-      const response = await fetch('/api/auth/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(userData)
+      const r = await fetch(`${API_BASE}/api/auth/register`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
       });
-
-      const data = await response.json();
-
-      if (response.ok) {
-        const decoded = jwtDecode(data.accessToken);
-        setToken(data.accessToken);
-        setUser({ id: decoded.sub, ...data.user });
-        sessionStorage.setItem('authToken', data.accessToken);
-        return { success: true, user: { id: decoded.sub, ...data.user }, token: data.accessToken };
-      } else {
-        return { success: false, error: data.error || 'Erreur lors de l\'inscription' };
+      const data = await r.json();
+      if (!r.ok) {
+        return { success: false, error: data?.error || `HTTP ${r.status}` };
       }
-    } catch (err) {
-      return { success: false, error: 'Erreur lors de l\'inscription' };
+
+      // Pas d'auto-login ici: on laisse la page d'inscription rediriger vers /login
+      // Si vous voulez auto-login, dé-commentez les 5 lignes ci-dessous:
+      // const t = data.accessToken;
+      // const u = data.user || {};
+      // sessionStorage.setItem("authToken", t);
+      // sessionStorage.setItem("authUser", JSON.stringify(u));
+      // setToken(t); setUser({ id: u.id, email: u.email, firstName: u.firstName, lastName: u.lastName });
+
+      return { success: true, user: { id: data?.user?.id, ...data.user } };
+    } catch (e) {
+      return { success: false, error: e?.message || "Erreur d'inscription" };
     }
-  };
+  }
 
-  const logout = () => {
-    setToken(null);
+  function logout() {
+    sessionStorage.removeItem("authToken");
+    sessionStorage.removeItem("authUser");
+    setToken("");
     setUser(null);
-    sessionStorage.removeItem('authToken');
-  };
+  }
 
-  const value = {
-    user,
-    token,
-    loading,
-    login,
-    register,
-    logout,
-    isAuthenticated: !!token && !!user,
-  };
+  const isAuthenticated = !!token;
+  const value = { token, user, loading, isAuthenticated, login, register, logout, authHeaders };
 
-  return (
-    <AuthContext.Provider value={value}>
-      {children}
-    </AuthContext.Provider>
-  );
-};
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+}
+
+export function useAuth() {
+  return useContext(AuthContext);
+}

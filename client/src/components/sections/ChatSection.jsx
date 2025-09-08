@@ -1,31 +1,24 @@
+// src/components/sections/ChatSection.jsx
 import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { Send, Loader2, Bot, User, Trash2, Copy, Check, MessageSquare, FileText, Briefcase } from "lucide-react";
-
-
 
 export default function ChatSection({
   apiUrl = "/api/chat",
   cardsApi = "/api/assistant/cards",
+  recosApi = "/api/assistant/recommendations",
   systemPrompt = "Tu es un assistant utile spécialisé en recrutement : tu aides à analyser des CV et des offres d'emploi, et tu réponds en français de façon claire et concise.",
-  refreshKey = 0,            // 👈 quand ça change, on refetch les cartes
-  autoShowCards = true       // 👈 affichage automatique au-dessus des messages
+  refreshKey = 0,
+  autoShowCards = true
 }) {
   const [messages, setMessages] = useState([
-    {
-      id: crypto.randomUUID(),
-      role: "assistant",
-      content: "Bonjour ! Je suis votre assistant IA spécialisé en recrutement. Comment puis-je vous aider aujourd'hui ?",
-    },
+    { id: crypto.randomUUID(), role: "assistant", content: "Bonjour ! Je suis votre assistant IA spécialisé en recrutement. Comment puis-je vous aider aujourd'hui ?" },
   ]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [copiedId, setCopiedId] = useState(null);
 
-  // carte ouverte dans le modal: { kind: 'profile'|'cv'|'job', data: {...} } ou null
   const [modalCard, setModalCard] = useState(null);
-
-  // Cartes assistant (profil / cv / job)
   const [cards, setCards] = useState({ profile: null, cv: null, job: null });
   const [cardsLoading, setCardsLoading] = useState(false);
   const [cardsError, setCardsError] = useState("");
@@ -34,33 +27,27 @@ export default function ChatSection({
   const listRef = useRef(null);
   const inputRef = useRef(null);
 
-  // Messages formatés pour l'API
   const apiMessages = useMemo(() => [
     { role: "system", content: systemPrompt },
-    ...messages.map(({ role, content }) => ({ role, content }))
+    ...messages.filter(m => !m.type).map(({ role, content }) => ({ role, content }))
   ], [messages, systemPrompt]);
 
-  // Scroll auto vers le bas
   useEffect(() => {
     const el = listRef.current;
     if (!el) return;
     el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
   }, [messages, loading, showCards, cards]);
 
-  // ====== FETCH CARTES ASSISTANT ======
   const fetchCards = useCallback(async () => {
     const token = sessionStorage.getItem("authToken");
-    if (!token) return; // utilisateur non connecté
+    if (!token) return;
     setCardsLoading(true);
     setCardsError("");
     try {
-      const res = await fetch(cardsApi, {
-        headers: { "Authorization": `Bearer ${token}` }
-      });
+      const res = await fetch(cardsApi, { headers: { Authorization: `Bearer ${token}` } });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`);
       setCards(data.cards || { profile: null, cv: null, job: null });
-      // si on a au moins une carte, on force l'affichage
       if (autoShowCards) setShowCards(true);
     } catch (e) {
       setCardsError(e.message || "Impossible de charger les cartes.");
@@ -69,30 +56,55 @@ export default function ChatSection({
     }
   }, [cardsApi, autoShowCards]);
 
-  // Charge au montage et à chaque refreshKey (upload CV / parse JD)
   useEffect(() => { fetchCards(); }, [fetchCards, refreshKey]);
 
-  // ====== CHAT ======
+  useEffect(() => {
+    window.__chatAppend = (payload) => {
+      if (!payload) return;
+      let normalized = null;
+      if (typeof payload === "string") {
+        normalized = { id: crypto.randomUUID(), role: "assistant", content: payload };
+      } else if (payload.type) {
+        normalized = { id: crypto.randomUUID(), ...payload };
+      } else if (payload.role && payload.content != null) {
+        normalized = { id: crypto.randomUUID(), role: payload.role, content: String(payload.content) };
+      }
+      if (normalized) setMessages(prev => [...prev, normalized]);
+    };
+    return () => { delete window.__chatAppend; };
+  }, []);
+
+  const fetchRecommendations = useCallback(async () => {
+    try {
+      const token = sessionStorage.getItem("authToken");
+      const res = await fetch(recosApi, { headers: { Authorization: `Bearer ${token}` } });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`);
+      const msgs = Array.isArray(data?.messages) ? data.messages : [];
+      if (msgs.length) setMessages(prev => [...prev, ...msgs.map(m => ({ id: crypto.randomUUID(), ...m }))]);
+    } catch (e) {
+      setMessages(prev => [...prev, { id: crypto.randomUUID(), type: "error", text: e.message || "Erreur recommandations" }]);
+    }
+  }, [recosApi]);
+
   async function sendMessage(text) {
     const trimmed = text.trim();
     if (!trimmed) return;
 
     setError("");
     setLoading(true);
-    const userMsg = { id: crypto.randomUUID(), role: "user", content: trimmed };
-    setMessages(prev => [...prev, userMsg]);
+    setMessages(prev => [...prev, { id: crypto.randomUUID(), role: "user", content: trimmed }]);
     setInput("");
 
     try {
+      const token = sessionStorage.getItem("authToken");
       const res = await fetch(apiUrl, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
         body: JSON.stringify({ messages: [...apiMessages, { role: "user", content: trimmed }] }),
       });
-
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`);
-
       const content = data?.message?.content || data?.reply || data?.choices?.[0]?.message?.content || "(Réponse vide)";
       setMessages(prev => [...prev, { id: crypto.randomUUID(), role: "assistant", content }]);
     } catch (e) {
@@ -112,57 +124,57 @@ export default function ChatSection({
     inputRef.current?.focus();
   }
   async function copyMessage(id, text) {
-    try {
-      await navigator.clipboard.writeText(text);
-      setCopiedId(id);
-      setTimeout(() => setCopiedId(null), 1200);
-    } catch (_) {}
+    try { await navigator.clipboard.writeText(text); setCopiedId(id); setTimeout(() => setCopiedId(null), 1200); } catch (_) {}
   }
 
   return (
-<div className="h-[640px] w-full flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-soft">
-  {/* Header */}
-  <div className="flex items-center justify-between gap-3 border-b border-slate-200 bg-gradient-to-r from-purple-600 to-blue-600 p-4">
-    <div className="flex items-center gap-3">
-      <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/20">
-        <MessageSquare className="h-5 w-5 text-white" />
+    <div className="h-[640px] w-full flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-soft">
+      {/* Header */}
+      <div className="flex items-center justify-between gap-3 border-b border-slate-200 bg-gradient-to-r from-purple-600 to-blue-600 p-4">
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/20">
+            <MessageSquare className="h-5 w-5 text-white" />
+          </div>
+          <div>
+            <h2 className="text-base font-semibold leading-tight text-white">Ask Vira</h2>
+            <p className="text-xs text-purple-100">Votre Virtual AI Recruiter</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => { setShowCards(v => !v); if (!showCards) fetchCards(); }}
+            className="flex items-center gap-2 rounded-lg bg-white/20 px-3 py-2 text-xs text-white hover:bg-white/30 transition-colors"
+          >
+            <FileText className="h-4 w-4" /> {showCards ? "Masquer cartes" : "Afficher cartes"}
+          </button>
+          <button
+            onClick={fetchRecommendations}
+            className="flex items-center gap-2 rounded-lg bg-white/20 px-3 py-2 text-xs text-white hover:bg-white/30 transition-colors"
+            title="Rafraîchir recommandations"
+          >
+            Recos
+          </button>
+          <button
+            onClick={clearChat}
+            className="flex items-center gap-2 rounded-lg bg-white/20 px-3 py-2 text-xs text-white hover:bg-white/30 transition-colors"
+            title="Nouveau chat"
+          >
+            <Trash2 className="h-4 w-4" /> Nouveau
+          </button>
+        </div>
       </div>
-      <div>
-        <h2 className="text-base font-semibold leading-tight text-white">Ask Vira</h2>
-        <p className="text-xs text-purple-100">Votre Virtual AI Recruiter</p>
-      </div>
-    </div>
-    <div className="flex items-center gap-2">
-      <button
-        onClick={() => { setShowCards(v => !v); if (!showCards) fetchCards(); }}
-        className="flex items-center gap-2 rounded-lg bg-white/20 px-3 py-2 text-xs text-white hover:bg-white/30 transition-colors"
-      >
-        <FileText className="h-4 w-4" /> {showCards ? "Masquer cartes" : "Afficher cartes"}
-      </button>
-      <button
-        onClick={clearChat}
-        className="flex items-center gap-2 rounded-lg bg-white/20 px-3 py-2 text-xs text-white hover:bg-white/30 transition-colors"
-        title="Nouveau chat"
-      >
-        <Trash2 className="h-4 w-4" /> Nouveau
-      </button>
-    </div>
-  </div>
-
 
       {/* Zone messages */}
-  <div ref={listRef} className="flex-1 space-y-3 overflow-y-auto bg-gradient-to-b from-purple-50/30 to-blue-50/30 p-4">
-    {showCards && (
-      <SummaryButtonsInline
-        cards={cards}
-        loading={cardsLoading}
-        error={cardsError}
-        onRefresh={fetchCards}
-        onOpen={(kind, data) => setModalCard({ kind, data })}
-      />
-    )}
-
-
+      <div ref={listRef} className="flex-1 space-y-3 overflow-y-auto bg-gradient-to-b from-purple-50/30 to-blue-50/30 p-4">
+        {showCards && (
+          <SummaryButtonsInline
+            cards={cards}
+            loading={cardsLoading}
+            error={cardsError}
+            onRefresh={fetchCards}
+            onOpen={(kind, data) => setModalCard({ kind, data })}
+          />
+        )}
 
         {messages.map(m => <MessageBubble key={m.id} m={m} onCopy={copyMessage} copiedId={copiedId} />)}
 
@@ -178,7 +190,7 @@ export default function ChatSection({
             </div>
           </div>
         )}
-  </div>
+      </div>
 
       {/* Error */}
       {error && <div className="mx-4 mb-2 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">❌ {error}</div>}
@@ -211,6 +223,7 @@ export default function ChatSection({
           </button>
         </div>
       </form>
+
       {modalCard && (
         <CardModal card={modalCard} onClose={() => setModalCard(null)} />
       )}
@@ -218,8 +231,81 @@ export default function ChatSection({
   );
 }
 
-/* ===== Bulles de message ===== */
+/* ===== Affichage de bulles (supporte types) ===== */
 function MessageBubble({ m, onCopy, copiedId }) {
+  // message "system"
+  if (m.type === "system") {
+    return (
+      <div className="flex items-start gap-3">
+        <div className="mt-1 flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-r from-purple-600/10 to-blue-600/10">
+          <Bot className="h-5 w-5 text-purple-600" />
+        </div>
+        <div className="max-w-[80%] rounded-2xl rounded-tl-none border border-slate-200 bg-white p-3 text-xs text-slate-500">
+          💡 {m.text}
+        </div>
+      </div>
+    );
+  }
+  // insight
+  if (m.type === "insight") {
+    return (
+      <div className="flex items-start gap-3">
+        <div className="mt-1 flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-r from-purple-600/10 to-blue-600/10">
+          <Bot className="h-5 w-5 text-purple-600" />
+        </div>
+        <div className="max-w-[80%] rounded-2xl rounded-tl-none border border-violet-200 bg-violet-50 p-3 text-sm text-violet-900">
+          {m.text}
+        </div>
+      </div>
+    );
+  }
+  // certifications
+  if (m.type === "certs") {
+    const renderItem = (x) => {
+      if (typeof x === "string") return x;
+      if (x && typeof x === "object") {
+        const title = x.certification || x.title || x.name || "";
+        const meta = [x.priority, x.relevance].filter(Boolean).join(" • ");
+        return meta ? `${title} — ${meta}` : title || JSON.stringify(x);
+      }
+      return String(x);
+    };
+    return (
+      <div className="flex items-start gap-3">
+        <div className="mt-1 flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-r from-green-600/10 to-emerald-600/10">
+          <Bot className="h-5 w-5 text-emerald-600" />
+        </div>
+        <div className="max-w-[80%] rounded-2xl rounded-tl-none border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">
+          <div className="font-semibold mb-1">Certifications suggérées</div>
+          <ul className="list-disc pl-5">
+            {(m.items || []).map((x, i) => <li key={i}>{renderItem(x)}</li>)}
+          </ul>
+        </div>
+      </div>
+    );
+  }
+  // projets
+  if (m.type === "projects") {
+    return (
+      <div className="flex items-start gap-3">
+        <div className="mt-1 flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-r from-amber-600/10 to-yellow-600/10">
+          <Bot className="h-5 w-5 text-amber-600" />
+        </div>
+        <div className="max-w-[80%] rounded-2xl rounded-tl-none border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+          <div className="font-semibold mb-1">Projets recommandés</div>
+          <ul className="list-disc pl-5">
+            {(m.items || []).map((x, i) => <li key={i}>{typeof x === "string" ? x : (x?.title || x?.name || JSON.stringify(x))}</li>)}
+          </ul>
+        </div>
+      </div>
+    );
+  }
+  // erreur
+  if (m.type === "error") {
+    return <div className="mx-4 my-1 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">❌ {m.text}</div>;
+  }
+
+  // messages classiques
   const isUser = m.role === "user";
   return (
     <div className={`flex items-start gap-3 ${isUser ? "justify-end" : ""}`}>
@@ -227,7 +313,11 @@ function MessageBubble({ m, onCopy, copiedId }) {
       <div className={`group relative max-w-[80%] whitespace-pre-wrap rounded-2xl px-4 py-3 text-sm shadow-sm ${isUser ? "rounded-tr-none bg-gradient-to-r from-slate-800 to-slate-900 text-white" : "rounded-tl-none border border-slate-200 bg-white text-slate-800"}`}>
         {m.content}
         {!isUser && (
-          <button onClick={() => onCopy(m.id, m.content)} className={`absolute -right-2 -top-2 hidden rounded-full border bg-white p-1.5 text-slate-500 shadow-sm transition hover:text-slate-700 group-hover:inline-flex ${copiedId === m.id ? "border-green-200 bg-green-50" : "border-slate-200"}`} title="Copier">
+          <button
+            onClick={() => onCopy(m.id, m.content)}
+            className={`absolute -right-2 -top-2 hidden rounded-full border bg-white p-1.5 text-slate-500 shadow-sm transition hover:text-slate-700 group-hover:inline-flex ${copiedId === m.id ? "border-green-200 bg-green-50" : "border-slate-200"}`}
+            title="Copier"
+          >
             {copiedId === m.id ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
           </button>
         )}
@@ -240,7 +330,6 @@ function MessageBubble({ m, onCopy, copiedId }) {
 function CardModal({ card, onClose }) {
   const { kind, data } = card || {};
   if (!data) return null;
-
   return (
     <div className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
@@ -257,7 +346,6 @@ function CardModal({ card, onClose }) {
           <div className="text-lg font-semibold text-slate-800 mt-0.5">{data.title}</div>
           {data.subtitle && <div className="text-sm text-slate-600">{data.subtitle}</div>}
         </div>
-
         <div className="px-5 py-4">
           {data.chips?.length > 0 && (
             <div className="mb-3 flex flex-wrap gap-2">
@@ -270,14 +358,8 @@ function CardModal({ card, onClose }) {
             </ul>
           )}
         </div>
-
         <div className="flex justify-end gap-2 px-5 py-3 border-t bg-slate-50 rounded-b-2xl">
-          <button
-            onClick={onClose}
-            className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm hover:bg-slate-50"
-          >
-            Fermer
-          </button>
+          <button onClick={onClose} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm hover:bg-slate-50">Fermer</button>
         </div>
       </div>
     </div>
@@ -285,15 +367,9 @@ function CardModal({ card, onClose }) {
 }
 
 function Chip({ children }) {
-  return (
-    <span className="text-[11px] px-2 py-0.5 rounded-full bg-slate-50 border border-slate-200">
-      {children}
-    </span>
-  );
+  return <span className="text-[11px] px-2 py-0.5 rounded-full bg-slate-50 border border-slate-200">{children}</span>;
 }
 
-
-/* ===== Résumés sous forme de BOUTONS ===== */
 function PillButton({ icon, label, onClick, disabled }) {
   return (
     <button
@@ -304,9 +380,7 @@ function PillButton({ icon, label, onClick, disabled }) {
         ${disabled ? 'cursor-not-allowed opacity-40' : 'hover:bg-slate-50 active:translate-y-[1px] border-slate-200'}`}
       title={label}
     >
-      <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-slate-100">
-        {icon}
-      </span>
+      <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-slate-100">{icon}</span>
       <span className="font-medium text-slate-700">{label}</span>
     </button>
   );
@@ -314,7 +388,6 @@ function PillButton({ icon, label, onClick, disabled }) {
 
 function SummaryButtonsInline({ cards, loading, error, onRefresh, onOpen }) {
   const hasAny = !!(cards?.profile || cards?.cv || cards?.job);
-
   return (
     <div className="flex items-start gap-3">
       <div className="mt-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-r from-purple-600/10 to-blue-600/10">
@@ -324,21 +397,10 @@ function SummaryButtonsInline({ cards, loading, error, onRefresh, onOpen }) {
       <div className="w-full max-w-[80%] rounded-2xl rounded-tl-none border border-slate-200 bg-white p-4 shadow-sm">
         <div className="mb-3 flex items-center justify-between">
           <div>
-            <div className="text-sm font-semibold text-slate-700">
-              Vue d’ensemble générée automatiquement.
-            </div>
-            {!hasAny && !loading && (
-              <div className="text-xs text-slate-500">
-                Uploade un CV ou colle une offre, puis rafraîchis.
-              </div>
-            )}
+            <div className="text-sm font-semibold text-slate-700">Vue d’ensemble générée automatiquement.</div>
+            {!hasAny && !loading && <div className="text-xs text-slate-500">Uploade un CV ou colle une offre, puis rafraîchis.</div>}
           </div>
-          <button
-            onClick={onRefresh}
-            className="text-xs rounded-lg border border-slate-200 px-2 py-1 hover:bg-slate-50"
-          >
-            Rafraîchir
-          </button>
+          <button onClick={onRefresh} className="text-xs rounded-lg border border-slate-200 px-2 py-1 hover:bg-slate-50">Rafraîchir</button>
         </div>
 
         {loading && <div className="text-sm text-slate-500">Chargement…</div>}
@@ -346,28 +408,12 @@ function SummaryButtonsInline({ cards, loading, error, onRefresh, onOpen }) {
 
         {hasAny && (
           <div className="flex flex-wrap gap-2">
-            <PillButton
-              icon={<User className="h-4 w-4 text-slate-700" />}
-              label="Voir le profil"
-              disabled={!cards?.profile}
-              onClick={() => onOpen('profile', cards.profile)}
-            />
-            <PillButton
-              icon={<FileText className="h-4 w-4 text-slate-700" />}
-              label="Voir le CV"
-              disabled={!cards?.cv}
-              onClick={() => onOpen('cv', cards.cv)}
-            />
-            <PillButton
-              icon={<Briefcase className="h-4 w-4 text-slate-700" />}
-              label="Voir l’offre"
-              disabled={!cards?.job}
-              onClick={() => onOpen('job', cards.job)}
-            />
+            <PillButton icon={<User className="h-4 w-4 text-slate-700" />} label="Voir le profil" disabled={!cards?.profile} onClick={() => onOpen('profile', cards.profile)} />
+            <PillButton icon={<FileText className="h-4 w-4 text-slate-700" />} label="Voir le CV" disabled={!cards?.cv} onClick={() => onOpen('cv', cards.cv)} />
+            <PillButton icon={<Briefcase className="h-4 w-4 text-slate-700" />} label="Voir l’offre" disabled={!cards?.job} onClick={() => onOpen('job', cards.job)} />
           </div>
         )}
       </div>
     </div>
   );
 }
-
