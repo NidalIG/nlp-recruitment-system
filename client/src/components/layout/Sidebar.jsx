@@ -37,7 +37,7 @@ export default function Sidebar({ isCollapsed, onToggle }) {
                   <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600/10 group-hover:bg-blue-600/20 transition-colors">
                     <Upload className="h-4 w-4 text-blue-600" />
                   </div>
-                  <span>Upload & Parsing</span>
+                  <span>Analyse de CV et JB</span>
                 </a>
               </li>
               
@@ -49,7 +49,7 @@ export default function Sidebar({ isCollapsed, onToggle }) {
                   <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-green-600/10 group-hover:bg-green-600/20 transition-colors">
                     <Target className="h-4 w-4 text-green-600" />
                   </div>
-                  <span>Scoring</span>
+                  <span>Compatibilité CV–job</span>
                 </a>
               </li>
               
@@ -61,7 +61,7 @@ export default function Sidebar({ isCollapsed, onToggle }) {
                   <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-purple-600/10 group-hover:bg-purple-600/20 transition-colors">
                     <MessageCircle className="h-4 w-4 text-purple-600" />
                   </div>
-                  <span>Chat IA</span>
+                  <span>Assistant IA</span>
                 </a>
               </li>
               
@@ -73,7 +73,7 @@ export default function Sidebar({ isCollapsed, onToggle }) {
                   <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-600/10 group-hover:bg-indigo-600/20 transition-colors">
                     <Brain className="h-4 w-4 text-indigo-600" />
                   </div>
-                  <span>Quiz IA (Gemini)</span>
+                  <span>Quiz IA</span>
                 </a>
               </li>
             </ul>
@@ -108,7 +108,7 @@ export default function Sidebar({ isCollapsed, onToggle }) {
             <a 
               href="#quiz" 
               className="flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-600/10 hover:bg-indigo-600/20 transition-colors"
-              title="Quiz IA (Gemini)"
+              title="Quiz IA"
             >
               <Brain className="h-5 w-5 text-indigo-600" />
             </a>

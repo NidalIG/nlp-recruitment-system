@@ -13,6 +13,7 @@ import ChatSection from './components/sections/ChatSection.jsx';
 import Sidebar from './components/layout/Sidebar.jsx';
 import AuthPage from './pages/AuthPage.jsx';
 import AppHeader from './components/layout/AppHeader.jsx';
+import DemoPage from './components/layout/DemoPage.jsx';
 
 import AssistantCards from './components/assistant/AssistantCards.jsx';
 
@@ -23,9 +24,11 @@ export default function App() {
         <HeaderWrapper />
         <Routes>
           {/* Pages publiques */}
+          <Route path="/demo" element={<DemoPage />}/>
           <Route path="/" element={<HomePage />} />
           <Route path="/login" element={<AuthPage defaultForm="login" />} />
           <Route path="/register" element={<AuthPage defaultForm="register" />} />
+          
 
           {/* Pages protégées */}
           <Route

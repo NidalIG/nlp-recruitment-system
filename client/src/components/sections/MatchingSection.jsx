@@ -20,26 +20,38 @@ export default function MatchingSection({ parsedCv, lastResult }) {
     if (score >= 55) return "bg-yellow-50 border-yellow-200";
     return "bg-red-50 border-red-200";
   };
+  const scoreColorHex = (s = 0) => {
+  if (s >= 80) return '#22c55e'; // green-500
+  if (s >= 50) return '#f59e0b'; // amber-500
+  return '#ef4444';              // red-500
+};
 
   return (
     <div className="space-y-4 animate-fade-in">
       <h2 className="text-xl font-bold text-slate-800 text-center">Résultats de l'analyse</h2>
 
-      <div className={`card p-6 space-y-4 ${getScoreBackground(lastResult.score)}`}>
-        <div className="flex items-center justify-center gap-6">
-          <ProgressCircle value={lastResult?.score ?? 0} />
-          <div className="text-center">
-            <div className={`text-3xl font-bold ${getScoreColor(lastResult.score)}`}>
-              {lastResult.score}%
-            </div>
-            <div className="text-lg font-semibold text-slate-700">
-              {lastResult.similarity_level}
-            </div>
-            <div className="text-slate-500 text-sm mt-1">
-              {lastResult.method || "Similarité par embedding"}
-            </div>
-          </div>
-        </div>
+      
+
+
+<div className={`card p-6 space-y-4 ${getScoreBackground(lastResult?.score)}`}>
+  <div className="flex items-center justify-center gap-6">
+    <ProgressCircle
+      value={lastResult?.score ?? 0}
+      textColor={scoreColorHex(lastResult?.score ?? 0)} // <-- ICI
+      // textClass="tracking-tight" // (optionnel pour du style en plus)
+    />
+    <div className="text-center">
+      {/* On n’affiche plus le score ici pour éviter le doublon */}
+      <div className="text-lg font-semibold text-slate-700">
+        {lastResult?.similarity_level}
+      </div>
+      {/* <div className="text-slate-500 text-sm mt-1">
+        {lastResult?.method || 'Similarité par embedding'}
+      </div> */}
+    </div>
+  </div>
+
+
 
         {/* Scores sectionnels */}
         {lastResult.sectional_scores && Object.keys(lastResult.sectional_scores).length > 0 && (
