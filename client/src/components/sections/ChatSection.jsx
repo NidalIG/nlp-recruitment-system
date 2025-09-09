@@ -133,11 +133,11 @@ export default function ChatSection({
       <div className="flex items-center justify-between gap-3 border-b border-slate-200 bg-gradient-to-r from-purple-600 to-blue-600 p-4">
         <div className="flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/20">
-            <MessageSquare className="h-5 w-5 text-white" />
+            <Bot className="h-5 w-5 text-black" />
           </div>
           <div>
-            <h2 className="text-base font-semibold leading-tight text-white">Ask Vira</h2>
-            <p className="text-xs text-purple-100">Votre Virtual AI Recruiter</p>
+            <h2 className="text-base font-semibold leading-tight text-white">TalentIA</h2>
+            <p className="text-xs text-purple-100">Votre coach carrière intelligent</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -159,7 +159,7 @@ export default function ChatSection({
             className="flex items-center gap-2 rounded-lg bg-white/20 px-3 py-2 text-xs text-white hover:bg-white/30 transition-colors"
             title="Nouveau chat"
           >
-            <Trash2 className="h-4 w-4" /> Nouveau
+            <MessageSquare className="h-4 w-4" /> Nouveau
           </button>
         </div>
       </div>
@@ -185,7 +185,7 @@ export default function ChatSection({
             </div>
             <div className="max-w-[80%] rounded-2xl rounded-tl-none border border-purple-100 bg-gradient-to-r from-purple-50 to-blue-50 px-4 py-3 text-sm text-slate-700">
               <div className="flex items-center gap-2 text-purple-700">
-                <Loader2 className="h-4 w-4 animate-spin" /> Vira rédige une réponse...
+                <Loader2 className="h-4 w-4 animate-spin" /> TalentIA rédige une réponse...
               </div>
             </div>
           </div>
@@ -208,7 +208,7 @@ export default function ChatSection({
               value={input}
               onChange={e => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Posez votre question à Vira..."
+              placeholder="Posez votre question à TalentIA..."
               className="w-full resize-none rounded-xl border border-slate-200 px-4 py-3 text-sm focus:border-purple-300 focus:outline-none focus:ring-2 focus:ring-purple-100"
             />
           </div>

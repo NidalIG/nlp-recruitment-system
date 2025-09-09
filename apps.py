@@ -609,7 +609,7 @@ def assistant_recommendations():
         if recos.get("projects"):
             messages.append({"type": "projects", "items": recos["projects"]})
         if recos.get("learning_plan"):
-            messages.append({"type": "insight", "text": "📚 Plan d’apprentissage disponible dans les recommandations."})
+            messages.append({"type": "insight", "text": "Plan d’apprentissage disponible dans les recommandations."})
         if recos.get("focus_skills"):
             messages.append({"type": "focus", "items": recos["focus_skills"]})
 
