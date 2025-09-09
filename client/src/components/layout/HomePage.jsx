@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Bot, Users, MessageCircle, GraduationCap, Clock, Shield, Zap, ChevronRight, Brain, Target } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
+import DemoPage from '../../components/layout/DemoPage';
 
 const HomePage = () => {
   const navigate = useNavigate();
@@ -16,26 +17,26 @@ const HomePage = () => {
   const features = [
     {
       icon: <Target className="w-8 h-8 text-blue-400" />,
-      title: "CV ↔ Job Matching",
-      description: "AI analyzes skills and compares them with job requirements for perfect matches.",
+      title: "Matching CV ↔ Emploi",
+      description: "L'IA analyse les compétences et les compare aux exigences des postes pour des correspondances parfaites.",
       gradient: "from-blue-500 to-cyan-400"
     },
     {
       icon: <Brain className="w-8 h-8 text-purple-400" />,
-      title: "Automated Quizzes",
-      description: "Generate customized quizzes adapted to specific positions to evaluate candidates.",
+      title: "Quiz Automatisés",
+      description: "Générez des quiz personnalisés adaptés aux postes spécifiques pour évaluer les candidats.",
       gradient: "from-purple-500 to-pink-400"
     },
     {
       icon: <MessageCircle className="w-8 h-8 text-green-400" />,
-      title: "Chatbot Recommendations",
-      description: "Intelligent training recommendations and career guidance for candidates.",
+      title: "Recommandations Chatbot",
+      description: "Recommandations de formation intelligentes et orientation de carrière pour les candidats.",
       gradient: "from-green-500 to-emerald-400"
     },
     {
       icon: <GraduationCap className="w-8 h-8 text-orange-400" />,
-      title: "Pedagogical Assistant",
-      description: "Smart learning companion to guide candidates through their career development.",
+      title: "Assistant Pédagogique",
+      description: "Compagnon d'apprentissage intelligent pour guider les candidats dans leur développement professionnel.",
       gradient: "from-orange-500 to-yellow-400"
     }
   ];
@@ -43,18 +44,18 @@ const HomePage = () => {
   const benefits = [
     {
       icon: <Clock className="w-6 h-6 text-blue-400" />,
-      title: "Time Savings for Recruiters",
-      description: "Automate screening processes and focus on what matters most."
+      title: "Gain de Temps pour les Recruteurs",
+      description: "Automatisez les processus de sélection et concentrez-vous sur l'essentiel."
     },
     {
       icon: <Shield className="w-6 h-6 text-green-400" />,
-      title: "Fair Experience for Candidates",
-      description: "Eliminate bias with AI-driven objective assessments."
+      title: "Expérience Équitable pour les Candidats",
+      description: "Éliminez les biais avec des évaluations objectives pilotées par l'IA."
     },
     {
       icon: <Zap className="w-6 h-6 text-purple-400" />,
-      title: "Modern AI & NLP Tools",
-      description: "Cutting-edge technology for recruitment excellence."
+      title: "Outils IA et NLP Modernes",
+      description: "Technologie de pointe pour l'excellence du recrutement."
     }
   ];
 
@@ -70,15 +71,15 @@ const HomePage = () => {
         <div className={`relative z-10 max-w-7xl mx-auto px-6 text-center transition-all duration-1000 ${isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}>
           <h2 className="text-5xl md:text-7xl font-bold mb-8 leading-tight">
             <span className="bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">
-              Boost Your Career
+              Boostez Votre Carrière
             </span>
             <br />
-            <span className="text-white">with AI Assistance</span>
+            <span className="text-white">avec l'Assistance IA</span>
           </h2>
           
           <p className="text-xl md:text-2xl text-gray-300 mb-12 max-w-3xl mx-auto leading-relaxed">
-            Get personalized job matches, prepare with AI-powered quizzes, 
-           and take your career to the next level with smart NLP technology.
+            Obtenez des correspondances d'emploi personnalisées, préparez-vous avec des quiz alimentés par l'IA, 
+            et propulsez votre carrière vers de nouveaux sommets grâce à la technologie NLP intelligente.
           </p>
           
           <div className="flex flex-col sm:flex-row items-center justify-center space-y-4 sm:space-y-0 sm:space-x-6">
@@ -87,16 +88,16 @@ const HomePage = () => {
               onClick={() => user ? navigate(`/app/${user.id}`) : navigate('/register')} 
               className="px-8 py-4 bg-gradient-to-r from-blue-500 to-purple-600 rounded-xl font-semibold text-lg hover:from-blue-600 hover:to-purple-700 transition-all duration-200 transform hover:scale-105 shadow-2xl hover:shadow-3xl flex items-center space-x-2"
             >
-              <span>Get Started</span>
+              <span>Commencer</span>
               <ChevronRight className="w-5 h-5" />
             </button>
 
             {/* Watch Demo → si connecté → espace utilisateur */}
             <button 
-              onClick={() => user ? navigate(`/app/${user.id}`) : navigate('/login')} 
+              onClick={() => navigate('/demo')} 
               className="px-8 py-4 border border-gray-600 rounded-xl font-semibold text-lg hover:border-gray-400 hover:bg-gray-800/50 transition-all duration-200 transform hover:scale-105"
             >
-              Watch Demo
+              Voir la Démo
             </button>
           </div>
         </div>
@@ -108,11 +109,11 @@ const HomePage = () => {
           <div className="text-center mb-16">
             <h3 className="text-4xl md:text-5xl font-bold mb-6">
               <span className="bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
-                Key Features
+                Fonctionnalités Clés
               </span>
             </h3>
             <p className="text-xl text-gray-300 max-w-2xl mx-auto">
-              Powerful AI-driven tools designed to transform your recruitment experience
+              Outils puissants pilotés par l'IA conçus pour transformer votre expérience de recrutement
             </p>
           </div>
           
@@ -147,11 +148,11 @@ const HomePage = () => {
           <div className="text-center mb-16">
             <h3 className="text-4xl md:text-5xl font-bold mb-6">
               <span className="bg-gradient-to-r from-green-400 to-blue-400 bg-clip-text text-transparent">
-                Why Choose Us?
+                Pourquoi Nous Choisir ?
               </span>
             </h3>
             <p className="text-xl text-gray-300 max-w-2xl mx-auto">
-              Experience the advantages of next-generation recruitment technology
+              Découvrez les avantages de la technologie de recrutement de nouvelle génération
             </p>
           </div>
           
@@ -185,16 +186,16 @@ const HomePage = () => {
       <section className="py-20 bg-gradient-to-r from-blue-600/20 to-purple-600/20">
         <div className="max-w-4xl mx-auto px-6 text-center">
           <h3 className="text-3xl md:text-4xl font-bold mb-6">
-            Ready to Transform Your Recruitment?
+            Prêt à Transformer Votre Recrutement ?
           </h3>
           <p className="text-xl text-gray-300 mb-8">
-            Join thousands of companies already using My Career AI to find the perfect candidates.
+            Rejoignez des milliers d'entreprises qui utilisent déjà My Career AI pour trouver les candidats parfaits.
           </p>
           <button 
             onClick={() => user ? navigate(`/app/${user.id}`) : navigate('/register')}
             className="px-10 py-4 bg-gradient-to-r from-blue-500 to-purple-600 rounded-xl font-semibold text-lg hover:from-blue-600 hover:to-purple-700 transition-all duration-200 transform hover:scale-105 shadow-2xl hover:shadow-3xl"
           >
-            Start Your Free Trial
+            Commencez Votre Essai Gratuit
           </button>
         </div>
       </section>
@@ -213,29 +214,29 @@ const HomePage = () => {
                 </h1>
               </div>
               <p className="text-gray-400 mb-6 max-w-md">
-                Revolutionizing recruitment through advanced AI and NLP technology. 
-                Building smarter, fairer hiring processes for the future.
+                Révolutionner le recrutement grâce à l'IA avancée et à la technologie NLP. 
+                Construire des processus d'embauche plus intelligents et plus équitables pour l'avenir.
               </p>
               <div className="text-gray-400">
-                <p>Contact: team@mycareerai.com</p>
-                <p className="mt-2">University Research Project</p>
+                <p>Contact : team@mycareerai.com</p>
+                <p className="mt-2">Projet de Recherche Universitaire</p>
               </div>
             </div>
             
             <div>
-              <h4 className="text-lg font-semibold mb-4 text-white">Company</h4>
+              <h4 className="text-lg font-semibold mb-4 text-white">Entreprise</h4>
               <ul className="space-y-2">
-                <li><a href="#" className="text-gray-400 hover:text-white transition-colors duration-200">About Us</a></li>
-                <li><a href="#" className="text-gray-400 hover:text-white transition-colors duration-200">Privacy Policy</a></li>
-                <li><a href="#" className="text-gray-400 hover:text-white transition-colors duration-200">Terms of Service</a></li>
+                <li><a href="#" className="text-gray-400 hover:text-white transition-colors duration-200">À Propos</a></li>
+                <li><a href="#" className="text-gray-400 hover:text-white transition-colors duration-200">Politique de Confidentialité</a></li>
+                <li><a href="#" className="text-gray-400 hover:text-white transition-colors duration-200">Conditions d'Utilisation</a></li>
               </ul>
             </div>
             
             <div>
               <h4 className="text-lg font-semibold mb-4 text-white">Support</h4>
               <ul className="space-y-2">
-                <li><a href="#" className="text-gray-400 hover:text-white transition-colors duration-200">Help Center</a></li>
-                <li><a href="#" className="text-gray-400 hover:text-white transition-colors duration-200">Contact Support</a></li>
+                <li><a href="#" className="text-gray-400 hover:text-white transition-colors duration-200">Centre d'Aide</a></li>
+                <li><a href="#" className="text-gray-400 hover:text-white transition-colors duration-200">Contacter le Support</a></li>
                 <li><a href="#" className="text-gray-400 hover:text-white transition-colors duration-200">Documentation</a></li>
               </ul>
             </div>
@@ -243,7 +244,7 @@ const HomePage = () => {
           
           <div className="border-t border-gray-800 mt-12 pt-8 text-center">
             <p className="text-gray-400">
-              © 2025 My Career AI. All rights reserved. Built with ❤️ for better recruitment.
+              © 2025 My Career AI. Tous droits réservés. Conçu avec ❤️ pour un meilleur recrutement.
             </p>
           </div>
         </div>

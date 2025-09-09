@@ -13,9 +13,9 @@ export default function UploadSection({
   setLastResult,
   onDataChanged,
 }) {
-  const [loading, setLoading] = useState(false);     // extraction
-  const [parsing, setParsing] = useState(false);     // parsing CV
-  const [matching, setMatching] = useState(false);   // spinner matching
+  const [loading, setLoading] = useState(false);     
+  const [parsing, setParsing] = useState(false);     
+  const [matching, setMatching] = useState(false);   
   const [error, setError] = useState("");
   const [warning, setWarning] = useState("");
   const [localFilename, setLocalFilename] = useState("");
@@ -36,7 +36,6 @@ export default function UploadSection({
 
   // ---- helpers ----
   function buildTextFromParsedCv(cv = {}) {
-    // Transforme un CV structuré en texte "lisible" pour l’endpoint /api/match
     const lines = [];
     const name = cv.name || cv.full_name || "Candidat";
     const headline =
@@ -84,7 +83,6 @@ export default function UploadSection({
   }
 
   async function fetchLatestCvTextFromDB() {
-    // Récupère le dernier CV PARSÉ et le recompose en texte
     const res = await fetch(`${API_BASE}/api/results?type=cv&limit=1`, {
       headers: getAuthHeaders(),
     });
@@ -150,9 +148,9 @@ export default function UploadSection({
         const errorData = await res.text();
         try {
           const errorJson = JSON.parse(errorData);
-          throw new Error(errorJson.error || `Upload échoué (HTTP ${res.status})`);
+          throw new Error(errorJson.error || `Échec de l'upload (HTTP ${res.status})`);
         } catch {
-          throw new Error(`Upload échoué (HTTP ${res.status})`);
+          throw new Error(`Échec de l'upload (HTTP ${res.status})`);
         }
       }
 
@@ -173,7 +171,7 @@ export default function UploadSection({
           ? "Délai dépassé. Vérifiez que le serveur est démarré."
           : err?.message?.includes("Failed to fetch")
           ? "Impossible de se connecter au serveur. Vérifiez qu'il est démarré sur le port 3001."
-          : err?.message || "Échec d'upload.";
+          : err?.message || "Échec de l'upload.";
       setError(msg);
       inputRef.current && (inputRef.current.value = "");
       setLocalFilename("");
@@ -182,10 +180,10 @@ export default function UploadSection({
     }
   }
 
-  // ---- parse CV (texte -> JSON structuré) ----
+  // ---- parse CV ----
   async function parseCV(textToparse = cvText) {
     if (!textToparse.trim()) {
-      setError("Aucun texte à parser");
+      setError("Aucun texte à analyser");
       return;
     }
 
@@ -203,36 +201,35 @@ export default function UploadSection({
         const t = await res.text();
         try {
           const j = JSON.parse(t);
-          throw new Error(j?.error || "Erreur de parsing");
+          throw new Error(j?.error || "Erreur d'analyse du CV");
         } catch {
-          throw new Error(`Erreur de parsing (HTTP ${res.status})`);
+          throw new Error(`Erreur d'analyse du CV (HTTP ${res.status})`);
         }
       }
 
       const data = await res.json();
       setParsedCv?.(data.parsed_cv);
-      onDataChanged?.(); // notifie ChatSection pour rafraîchir les cartes
+      onDataChanged?.(); 
     } catch (err) {
       const msg = err?.message?.includes("Failed to fetch")
-        ? "Impossible de se connecter au serveur pour le parsing."
-        : err.message || "Erreur lors du parsing structuré";
+        ? "Impossible de se connecter au serveur pour analyser le CV."
+        : err.message || "Erreur lors de l'analyse structurée";
       setError(msg);
     } finally {
       setParsing(false);
     }
   }
 
-  // ---- parse JD (optionnel bouton) ----
+  // ---- parse JD ----
   async function handleParseJob() {
     if (!jobText?.trim()) return;
     setLoading(true);
     setError("");
     try {
       const res = await userApiService.parseJob(jobText.trim());
-      // Option: set parsed job in parent state
       onDataChanged?.();
     } catch (err) {
-      setError(err.message || "Erreur parsing job");
+      setError(err.message || "Erreur d'analyse de l'offre");
     } finally {
       setLoading(false);
     }
@@ -243,27 +240,24 @@ export default function UploadSection({
     setError("");
     setWarning("");
 
-    // Vérif JD
     if (!jobText?.trim()) {
-      setError("Veuillez remplir la section Job Description avant d’analyser.");
+      setError("Veuillez remplir la description du poste avant d'analyser.");
       jobRef.current?.focus();
       return;
     }
 
-    // Prépare le texte CV : si vide → aller le chercher en base
     let cvTextToUse = (cvText || "").trim();
     if (!cvTextToUse) {
       try {
         const latest = await fetchLatestCvTextFromDB();
         if (!latest || !latest.text?.trim()) {
           setError(
-            "Aucun CV téléversé et aucun CV trouvé en base. Veuillez téléverser un CV avant d’analyser."
+            "Aucun CV téléversé et aucun CV trouvé en base. Veuillez téléverser un CV avant d'analyser."
           );
           inputRef.current?.focus();
           return;
         }
         cvTextToUse = latest.text;
-        // met à jour l’UI pour transparence
         setCvText(latest.text);
         setParsedCv?.(latest.parsed || {});
         setFilename?.(latest.filename);
@@ -292,9 +286,9 @@ export default function UploadSection({
         const t = await res.text();
         try {
           const j = JSON.parse(t);
-          throw new Error(j?.error || "Erreur calcul matching");
+          throw new Error(j?.error || "Erreur de calcul de compatibilité");
         } catch {
-          throw new Error(`Erreur calcul matching (HTTP ${res.status})`);
+          throw new Error(`Erreur de calcul de compatibilité (HTTP ${res.status})`);
         }
       }
 
@@ -307,17 +301,15 @@ export default function UploadSection({
         skill_analysis: data.skill_analysis || {},
         missing_keywords: data.missing_keywords || [],
         suggestions: data.suggestions || [],
-        method: data.method || "Embedding similarity",
+        method: data.method || "Similarité embeddings",
         parsed_cv: data.parsed_cv,
         parsed_job: data.parsed_job,
       });
 
-      // Pousser les messages de recommandations dans le chat si dispo
       if (Array.isArray(data.messages) && data.messages.length && window.__chatAppend) {
         data.messages.forEach((m) => window.__chatAppend(m));
       }
 
-      // Message final dans le chat
       if (window.__chatAppend) {
         window.__chatAppend({
           type: "system",
@@ -339,7 +331,7 @@ export default function UploadSection({
       {/* Titre principal */}
       <div className="text-center">
         <h1 className="mb-2 text-2xl font-bold text-slate-800">
-          Upload Candidate Profile and Job Description
+          Téléversement CV et description de poste
         </h1>
         <p className="text-slate-600">
           Téléchargez un CV et saisissez la description du poste pour analyser la compatibilité
@@ -349,9 +341,9 @@ export default function UploadSection({
       {/* Section Upload */}
       <div className="card p-6">
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-          {/* Upload Resume */}
+          {/* Upload CV */}
           <div className="space-y-4">
-            <h3 className="text-lg font-semibold text-slate-700">Upload Resume</h3>
+            <h3 className="text-lg font-semibold text-slate-700">Téléverser CV</h3>
 
             <div className="relative">
               <input
@@ -362,37 +354,49 @@ export default function UploadSection({
                 onChange={onFile}
                 className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
               />
-              <div className="rounded-lg border-2 border-dashed border-slate-300 p-8 text-center transition-colors hover:border-blue-400 hover:bg-blue-50/50">
-                <div className="space-y-3">
-                  <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-slate-100">
-                    <svg className="h-8 w-8 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                    </svg>
+              <div className="rounded-lg border-2 border-dashed min-h-[202px] mb-1 border-slate-300 p-8 text-center transition-colors hover:border-blue-400 hover:bg-blue-50/50">
+                {/* Affichage conditionnel : fichier sélectionné ou zone de drop */}
+                {localFilename ? (
+                  <div className="flex flex-col items-center justify-center h-full space-y-4">
+                    <div className="flex items-center justify-center h-16 w-16 rounded-full bg-green-100">
+                      <svg className="h-8 w-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    </div>
+                    <div className="text-center">
+                      <p className="font-medium text-slate-700">📄 {localFilename}</p>
+                      <p className="text-sm text-slate-500 mt-1">Fichier téléversé avec succès</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => inputRef.current?.click()}
+                      className="text-blue-600 hover:underline text-sm font-medium"
+                    >
+                      Changer de fichier
+                    </button>
                   </div>
-                  <div>
-                    <p className="font-medium text-slate-600">Drag and drop file here</p>
-                    <p className="text-sm text-slate-500">Limit 200MB per file • PDF/TXT/DOCX</p>
+                ) : (
+                  <div className="space-y-3">
+                    <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-slate-100">
+                      <svg className="h-8 w-8 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                      </svg>
+                    </div>
+                    <div>
+                      <p className="font-medium text-slate-600">Glisser-déposer le fichier ici</p>
+                      <p className="text-sm text-slate-500">Limite 200MB par fichier • PDF/TXT/DOCX</p>
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
             </div>
 
-            {/* Fichier choisi */}
-            {localFilename && (
-              <div className="flex items-center justify-between rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
-                <span className="truncate">📄 {localFilename}</span>
-                <button
-                  type="button"
-                  onClick={() => inputRef.current?.click()}
-                  className="text-blue-600 hover:underline"
-                >
-                  Changer
-                </button>
-              </div>
-            )}
-
-            <button type="button" onClick={() => inputRef.current?.click()} className="btn btn-outline w-full">
-              Browse files
+            <button 
+              type="button" 
+              onClick={() => inputRef.current?.click()} 
+              className="btn btn-outline w-full flex items-center justify-center"
+            >
+              {localFilename ? "Choisir un autre fichier" : "Parcourir fichiers"}
             </button>
 
             {loading && <div className="text-center text-sm text-blue-600">📄 Extraction en cours...</div>}
@@ -401,13 +405,13 @@ export default function UploadSection({
 
           {/* Job Description */}
           <div className="space-y-4">
-            <h3 className="text-lg font-semibold text-slate-700">Upload Job Description</h3>
+            <h3 className="text-lg font-semibold text-slate-700">Téléverser description du poste</h3>
 
             <textarea
               ref={jobRef}
               value={jobText}
               onChange={(e) => setJobText(e.target.value)}
-              rows={8}
+              rows={7}
               placeholder="Collez ici la description du poste..."
               className="w-full resize-none rounded-lg border border-slate-300 p-4 focus:border-blue-500 focus:ring-2 focus:ring-blue-500"
             />
@@ -415,14 +419,10 @@ export default function UploadSection({
             <button
               onClick={handleParseJob}
               disabled={!jobText?.trim() || loading}
-              className="w-full btn btn-outline"
+              className="w-full btn btn-outline flex items-center justify-center"
             >
-              Analyser l’offre
+              Analyser l'offre
             </button>
-
-            <div className="text-center text-sm text-slate-500">
-              Ou glissez-déposez un fichier de description de poste
-            </div>
           </div>
         </div>
 
