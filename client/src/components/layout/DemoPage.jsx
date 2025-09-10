@@ -160,7 +160,7 @@ const DemoPage = () => {
                     onLoadedMetadata={handleLoadedMetadata}
                     poster="../images/interface.png"
                     >
-                    <source src="../videos/CV Matching + Chat IA - École – Microsoft​ Edge 2025-09-01 14-24-58.mp4" type="video/mp4" />
+                    <source src="../videos/CV Matching + Chat IA -2025-09-10 171437.mp4" type="video/mp4" />
                     <source src="/path/to/your-demo-video.webm" type="video/webm" />
                     Votre navigateur ne supporte pas la lecture vidéo.
                     </video>
@@ -211,7 +211,7 @@ const DemoPage = () => {
           {/* Video Description */}
           <div className="text-center mt-8">
             <h3 className="text-2xl font-semibold mb-4">
-              Démo complète - 5 minutes
+              Démo complète - 4 minutes
             </h3>
             <p className="text-gray-300 max-w-3xl mx-auto">
               Cette vidéo vous présente l'ensemble des fonctionnalités de Assistant Carrière : 
