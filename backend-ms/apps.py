@@ -172,7 +172,140 @@ def build_profile_card(user_doc: Dict[str, Any], stats: Dict[str, Any]) -> Dict[
         "bullets": bullets,
         "updatedAt": datetime.utcnow().isoformat() + "Z"
     }
+    
+## user profile page
+# @app.route('/api/user/profile', methods=['PUT'])
+# @jwt_required()
+# def update_user_profile():
+#     try:
+#         data = request.get_json() or {}
+#         user_id = get_jwt_identity()
+#         obj_id = ObjectId(user_id)
+        
+#         # Mise à jour des champs autorisés
+#         update_fields = {}
+#         allowed_fields = ['firstName', 'lastName', 'phone', 'location', 'bio', 'avatar']
+        
+#         for field in allowed_fields:
+#             if field in data:
+#                 update_fields[field] = data[field]
+        
+#         result = users_collection.update_one(
+#             {'_id': obj_id}, 
+#             {'$set': update_fields}
+#         )
+        
+#         if result.modified_count > 0:
+#             return jsonify({'success': True, 'message': 'Profil mis à jour'})
+#         else:
+#             return jsonify({'success': True, 'message': 'Aucune modification détectée'})
+#     except Exception as e:
+#         return jsonify({'success': False, 'error': str(e)}), 500
+    
+# Mettez à jour la route PUT existante dans apps.py pour retourner l'utilisateur mis à jour
 
+@app.route('/api/user/profile', methods=['PUT'])
+@jwt_required()
+def update_user_profile():
+    try:
+        data = request.get_json() or {}
+        user_id = get_jwt_identity()
+        obj_id = ObjectId(user_id)
+        
+        # Mise à jour des champs autorisés
+        update_fields = {}
+        allowed_fields = ['firstName', 'lastName', 'phone', 'location', 'bio', 'avatar']
+        
+        for field in allowed_fields:
+            if field in data:
+                update_fields[field] = data[field]
+        
+        # Ajout du timestamp de mise à jour
+        update_fields['updatedAt'] = datetime.now(timezone.utc).isoformat()
+        
+        result = users_collection.update_one(
+            {'_id': obj_id}, 
+            {'$set': update_fields}
+        )
+        
+        if result.modified_count > 0:
+            # Récupère l'utilisateur mis à jour
+            updated_user = users_collection.find_one(
+                {'_id': obj_id}, 
+                {'password': 0}
+            )
+            if updated_user:
+                updated_user['_id'] = str(updated_user['_id'])
+            
+            return jsonify({
+                'success': True, 
+                'message': 'Profil mis à jour',
+                'user': updated_user
+            })
+        else:
+            return jsonify({
+                'success': True, 
+                'message': 'Aucune modification détectée'
+            })
+    except Exception as e:
+        return jsonify({
+            'success': False, 
+            'error': str(e)
+        }), 500
+
+
+@app.route('/api/user/profile', methods=['GET'])
+@jwt_required()
+def get_user_profile():
+    """
+    Récupère le profil complet de l'utilisateur connecté
+    """
+    try:
+        user_id = get_jwt_identity()
+        obj_id = ObjectId(user_id)
+        
+        # Récupère l'utilisateur sans le mot de passe
+        user = users_collection.find_one(
+            {'_id': obj_id}, 
+            {'password': 0}  # Exclut le champ password
+        )
+        
+        if not user:
+            return jsonify({
+                'success': False, 
+                'error': 'Utilisateur non trouvé'
+            }), 404
+        
+        # Convertit ObjectId en string pour le JSON
+        user['_id'] = str(user['_id'])
+        
+        # Structure la réponse avec tous les champs possibles
+        profile_data = {
+            'id': user['_id'],
+            'email': user.get('email', ''),
+            'firstName': user.get('firstName', ''),
+            'lastName': user.get('lastName', ''),
+            'phone': user.get('phone', ''),
+            'location': user.get('location', ''),
+            'bio': user.get('bio', ''),
+            'avatar': user.get('avatar', None),
+            'createdAt': user.get('createdAt', ''),
+            'updatedAt': user.get('updatedAt', ''),
+            # Ajoutez d'autres champs selon vos besoins
+        }
+        
+        return jsonify({
+            'success': True, 
+            'user': profile_data
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False, 
+            'error': f'Erreur lors de la récupération du profil: {str(e)}'
+        }), 500    
+    
+    
 # -------------------- HELPERS RECOMMANDATIONS --------------------
 def _norm_list(x):
     return x if isinstance(x, list) else (x or [])

@@ -109,7 +109,7 @@ export default function AssistantWorkspace() {
             {/* Chat */}
             <Section
               id="chat"
-              title="Chat IA (Vira)"
+              title="Chat IA "
               desc="Pose des questions contextuelles (CV/JD) à l’assistant."
             >
               <ChatSection refreshKey={refreshKey} />

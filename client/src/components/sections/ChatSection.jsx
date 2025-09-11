@@ -141,7 +141,7 @@ export default function ChatSection({
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <button
+          {/* <button
             onClick={() => { setShowCards(v => !v); if (!showCards) fetchCards(); }}
             className="flex items-center gap-2 rounded-lg bg-white/20 px-3 py-2 text-xs text-white hover:bg-white/30 transition-colors"
           >
@@ -153,7 +153,7 @@ export default function ChatSection({
             title="Rafraîchir recommandations"
           >
             Recos
-          </button>
+          </button> */}
           <button
             onClick={clearChat}
             className="flex items-center gap-2 rounded-lg bg-white/20 px-3 py-2 text-xs text-white hover:bg-white/30 transition-colors"
@@ -166,7 +166,7 @@ export default function ChatSection({
 
       {/* Zone messages */}
       <div ref={listRef} className="flex-1 space-y-3 overflow-y-auto bg-gradient-to-b from-purple-50/30 to-blue-50/30 p-4">
-        {showCards && (
+        {/* {showCards && (
           <SummaryButtonsInline
             cards={cards}
             loading={cardsLoading}
@@ -174,7 +174,7 @@ export default function ChatSection({
             onRefresh={fetchCards}
             onOpen={(kind, data) => setModalCard({ kind, data })}
           />
-        )}
+        )} */}
 
         {messages.map(m => <MessageBubble key={m.id} m={m} onCopy={copyMessage} copiedId={copiedId} />)}
 

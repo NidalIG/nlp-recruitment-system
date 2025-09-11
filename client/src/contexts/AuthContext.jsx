@@ -1,5 +1,6 @@
 // client/src/contexts/AuthContext.jsx
 import React, { createContext, useContext, useEffect, useState } from "react";
+import userApiService from '../services/userApiService';
 
 const AuthContext = createContext(null);
 
@@ -18,7 +19,30 @@ export function AuthProvider({ children }) {
     }
   });
   const [loading, setLoading] = useState(true);
-
+  const loadFullUserProfile = async () => {
+  try {
+    setLoading(true);
+    const response = await userApiService.getUserProfile();
+    if (response.success) {
+      setUser(response.user);
+      return response.user;
+    }
+  } catch (error) {
+    console.error('Erreur lors du chargement du profil:', error);
+    // En cas d'erreur, essayez avec l'ancienne méthode
+    try {
+      const fallbackResponse = await userApiService.getMe();
+      if (fallbackResponse.success) {
+        setUser(fallbackResponse.user);
+        return fallbackResponse.user;
+      }
+    } catch (fallbackError) {
+      console.error('Erreur fallback:', fallbackError);
+    }
+  } finally {
+    setLoading(false);
+  }
+  };
   // Headers d'auth
   const authHeaders = (extra = {}) => ({
     "Content-Type": "application/json",
@@ -32,6 +56,7 @@ export function AuthProvider({ children }) {
     (async () => {
       if (!token) { setLoading(false); return; }
       try {
+        
         const res = await fetch(`${API_BASE}/api/auth/me`, { headers: authHeaders() });
         const data = await res.json();
         if (res.ok && data?.success) {
@@ -45,6 +70,7 @@ export function AuthProvider({ children }) {
           };
           setUser(normalized);
           sessionStorage.setItem("authUser", JSON.stringify(normalized));
+          await loadFullUserProfile();
         } else {
           // token expiré/invalid → purge
           sessionStorage.removeItem("authToken");
@@ -95,7 +121,7 @@ export function AuthProvider({ children }) {
   } catch (e) {
     return { success: false, error: e?.message || "Erreur de connexion" };
   }
-}
+  }
 
 
   // Rem: par conception, on NE connecte PAS automatiquement après inscription.
@@ -133,7 +159,7 @@ export function AuthProvider({ children }) {
   }
 
   const isAuthenticated = !!token;
-  const value = { token, user, loading, isAuthenticated, login, register, logout, authHeaders };
+  const value = { token, user, loading, isAuthenticated, login, register, logout, authHeaders,loadFullUserProfile};
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

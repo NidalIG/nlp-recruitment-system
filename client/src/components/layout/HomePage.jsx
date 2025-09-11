@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Bot, Users, MessageCircle, GraduationCap, Clock, Shield, Zap, ChevronRight, Brain, Target } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
-import DemoPage from '../../components/layout/DemoPage';
+import DemoPage from '../layout/DemoPage';
 
 const HomePage = () => {
   const navigate = useNavigate();

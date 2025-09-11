@@ -12,7 +12,27 @@ class UserApiService {
     });
     return this.handleResponse(res);
   }
+  
 
+  updateUserProfile = async (profileData) => {
+    try {
+      const response = await fetch(`${this.baseURL}/api/user/profile`, {
+        method: 'PUT',
+        headers: this.getAuthHeaders(),
+        body: JSON.stringify(profileData)
+      });
+      const result = await this.handleResponse(response);
+      
+      // Si l'API renvoie l'utilisateur mis à jour, on le retourne
+      if (result.success && result.user) {
+        return { ...result, updatedUser: result.user };
+      }
+      
+      return result;
+    } catch (error) {
+      throw new Error(`Erreur lors de la mise à jour du profil: ${error.message}`);
+    }
+  };
   // === Auth ===
   async register(data) {
     const res = await fetch(`${this.baseURL}/api/auth/register`, {
